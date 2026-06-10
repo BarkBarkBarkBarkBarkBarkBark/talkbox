@@ -66,8 +66,10 @@ class Settings(BaseSettings):
     # Master switch for real outbound calls. Even when enabled, the backend
     # only dials numbers found in the agencies database (allowlist).
     kiosk_calling_enabled: bool = Field(default=False, alias="KIOSK_CALLING_ENABLED")
-    # Optional extra allowlisted number for end-to-end testing (your cell).
-    kiosk_test_call_number: str = Field(default="", alias="KIOSK_TEST_CALL_NUMBER")
+    # Comma-separated list of E.164 numbers allowed outside the DB allowlist.
+    # Example: +19165551234,+17075559876
+    # On Twilio trial accounts, only verified numbers can be called.
+    kiosk_test_call_numbers: str = Field(default="", alias="KIOSK_TEST_CALL_NUMBERS")
 
 
 @lru_cache(maxsize=1)

@@ -29,6 +29,17 @@ def normalize_digits(raw: str | None) -> str:
     return re.sub(r"\D", "", str(raw or ""))
 
 
+def _test_numbers_last10() -> list[str]:
+    """Parse KIOSK_TEST_CALL_NUMBERS (comma-separated) into last-10-digit strings."""
+    raw = settings.kiosk_test_call_numbers or ""
+    result = []
+    for entry in raw.split(","):
+        digits = normalize_digits(entry.strip())
+        if len(digits) >= 7:          # accept 7-digit local, 10-digit, 11-digit
+            result.append(digits[-10:])
+    return result
+
+
 def to_e164(digits: str) -> str | None:
     """US-centric normalization to +E.164."""
     if len(digits) == 10:
@@ -53,13 +64,12 @@ class KioskCallService:
         Matches on the last 10 digits so '9164476243', '19164476243' and
         formatted variants in the CSV all line up.
         """
-        if len(digits) < 10:
+        if len(digits) < 7:
             return None
         last10 = digits[-10:]
 
-        test_number = normalize_digits(settings.kiosk_test_call_number)
-        if test_number and test_number[-10:] == last10:
-            return "Test number (KIOSK_TEST_CALL_NUMBER)"
+        if last10 in _test_numbers_last10():
+            return "Test number (KIOSK_TEST_CALL_NUMBERS)"
 
         connection = None
         cursor = None
