@@ -200,12 +200,31 @@
 }
 
 /* ───── Dial tab ───── */
+.kiosk-dial-layout {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.kiosk-dial-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 1vh, 0.5rem);
+}
+
+.kiosk-dial-hint {
+  font-size: clamp(0.8rem, 1.8vh, 0.95rem);
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+  text-align: center;
+}
+
 .kiosk-dial-display {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(3rem, 9vh, 4.5rem);
-  padding: clamp(0.5rem, 1.8vh, 0.9rem) clamp(0.75rem, 2.5vw, 1.25rem);
+  min-height: clamp(2.5rem, 7vh, 3.5rem);
+  padding: clamp(0.3rem, 1.2vh, 0.6rem) clamp(0.75rem, 2.5vw, 1.25rem);
   border: 2px solid hsl(var(--border));
   border-radius: var(--radius-lg);
   background: hsl(var(--card));
@@ -227,7 +246,7 @@
   display: flex;
   justify-content: center;
   gap: clamp(0.5rem, 2vw, 1rem);
-  margin-top: clamp(0.4rem, 1.4vh, 0.7rem);
+  margin-top: 0;
 }
 
 .kiosk-dial-btn {
@@ -257,8 +276,9 @@
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  align-items: center;
-  margin-top: clamp(0.5rem, 1.8vh, 1rem);
+  align-items: flex-start;
+  justify-content: center;
+  margin-top: clamp(0.4rem, 1.2vh, 0.6rem);
   overflow: hidden;
 }
 
@@ -518,8 +538,8 @@
 }
 
 .kiosk-keypad button {
-  aspect-ratio: 1.6 / 1;
-  font-size: clamp(1.2rem, 4vh, 2rem);
+  aspect-ratio: 1.8 / 1;
+  font-size: clamp(1.1rem, 3.2vh, 1.6rem);
   font-weight: 700;
   border-radius: var(--radius-lg);
   border: 2px solid hsl(var(--border));

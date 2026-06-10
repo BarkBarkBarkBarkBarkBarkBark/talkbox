@@ -38,8 +38,12 @@ export default function KioskShell({ demo = false }) {
   useKeypadInput(handleKey, { enabled: true });
 
   useEffect(() => {
-    const tick = () =>
-      setClock(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    const tick = () => {
+      const now = new Date();
+      const date = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+      const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setClock(`${date}  ${time}`);
+    };
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
@@ -119,7 +123,7 @@ export default function KioskShell({ demo = false }) {
   return (
     <div className="kiosk-root">
       <KioskStatusBar
-        title={state.config?.name || "Pointer"}
+        title={state.config?.name || "Talk Box"}
         demo={demo}
         mock={Boolean(state.config?.mock_mode)}
         clock={clock}

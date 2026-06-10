@@ -1,5 +1,5 @@
 // Persistent top bar: kiosk identity + status flags (mock data, demo mode).
-export default function KioskStatusBar({ title = "Pointer", demo = false, mock = false, clock }) {
+export default function KioskStatusBar({ title = "Talk Box", demo = false, mock = false, clock }) {
   return (
     <header className="kiosk-status">
       <span style={{ fontSize: "clamp(1rem, 3vh, 1.4rem)" }}>{title}</span>
