@@ -1,0 +1,40 @@
+[project]
+name = "pointer-backend"
+version = "1.0.0"
+description = "Pointer AI backend — shelter-oriented query assistant (FastAPI + LangChain + pgvector)"
+requires-python = ">=3.11"
+readme = "../README.md"
+license = { text = "Proprietary" }
+
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.34",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.7",
+  "python-multipart>=0.0.20",
+  "langchain>=0.3",
+  "langchain-openai>=0.3",
+  "langchain-aws>=0.2.15",
+  "langchain-postgres>=0.0.13",
+  "pgvector>=0.3",
+  "psycopg[binary]>=3.2",
+  "psycopg2-binary>=2.9",
+  "asyncpg>=0.30",
+  "sqlalchemy[asyncio]>=2.0",
+  "alembic>=1.14",
+  "fastapi-users[sqlalchemy]>=14.0",
+  "cryptography>=43.0",
+  "twilio>=9.5",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.28",
+  "ruff>=0.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

@@ -1,0 +1,36 @@
+# ───── Secrets ─────
+.env
+.env.*
+!.env.example
+*Twilio Console*
+
+# ───── Python ─────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# ───── Node / Vite ─────
+node_modules/
+dist/
+.vite/
+
+# ───── OS / editor ─────
+.DS_Store
+*.code-workspace
+
+# ───── Preserved nested git histories (local only) ─────
+.git.bak/
+
+# ───── Logs & runtime data ─────
+logs/
+*.log
+
+# ───── Large local-only datasets (>GitHub limits / generated) ─────
+Health Scout/Pointer Databases/
+Health Scout/unnessecary/
+PDF_Analyzer/OutputDir/

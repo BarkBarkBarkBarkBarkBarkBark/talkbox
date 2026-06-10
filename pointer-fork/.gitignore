@@ -1,0 +1,51 @@
+# ───── Python ─────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ───── Node / Vite ─────
+node_modules/
+dist/
+.vite/
+*.log
+
+# ───── Environments ─────
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# ───── IDEs / AI assistants ─────
+.vscode/
+.idea/
+.claude/
+*.swp
+
+# ───── OS ─────
+.DS_Store
+Thumbs.db
+
+# ───── Project-specific ─────
+secrets/
+data/
+screenshots/
+*.bak
+*.tmp
+
+# Heavy CSV/XLSX source dumps: csv/ is reserved for operational exports.
+csv/*

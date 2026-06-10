@@ -1,0 +1,364 @@
+# =============================================================================
+# Pointer / Health Scout — Data Source Manifest
+# =============================================================================
+# Machine-readable index of every data source behind the Pointer router.
+#
+# Audience: an automation agent (or a human) that needs to (re)collect, parse,
+# and rebuild the Pointer databases from authoritative upstream sources.
+#
+# A human-readable companion lives in DATA_SOURCES.md.
+# The scraper/bot design lives in SCRAPER_PLAN.md.
+# The folder reorg tool lives in migrate_datasets.py.
+#
+# Field reference (per source):
+#   id            : stable slug used by the scraper + migration script.
+#   title         : human name.
+#   tier          : necessary | enrichment | archive
+#                   - necessary  = consumed by the live Pointer router.
+#                   - enrichment = static lookup that decorates a necessary table.
+#                   - archive    = analytical "chaff", kept for reference only.
+#   category      : canonical Pointer category (matches the router output and
+#                   pointer-fork seeds/query_categories/*.json). null if N/A.
+#   target_table  : table this source feeds in the rebuilt DB. null for archive.
+#   why           : why this source matters to the product.
+#   format        : on-disk / upstream format.
+#   scraper_type  : cms_api | ckan_api | html_bs4 | pdf_llm | manual_xlsx | config
+#   upstream      : where a fresh copy comes from (landing page).
+#   download      : direct download URL or API resolver. "resolve:" prefix means
+#                   the URL must be resolved at runtime (hash rotates).
+#   update_cadence: how often the upstream refreshes.
+#   local_raw     : current location(s) of the raw file(s) in this repo.
+#   join_keys     : columns used to join/merge into the unified model.
+#   license       : usage terms.
+#   notes         : caveats.
+# =============================================================================
+
+manifest_version: 1
+generated: "2026-06-10"
+region: Sacramento County, CA
+canonical_master: "../Pointer Databases/PointerDB.xlsx"   # .ods mirror alongside
+
+# Realized on-disk layout (paths in `local_raw` are relative to this file):
+#   ../Pointer Databases/   functional router DBs + enrichment + raw doctor sources
+#   reference_database/     county provider PDFs + reference spreadsheets
+#   ./ (Datasets/)          leftover archive analytics (Discharge, MS-DRG)
+#   ../unnessecary/         deduped format-twins + chaff (safe to delete)
+
+# ---------------------------------------------------------------------------
+# Data model decision (see SCRAPER_PLAN.md §Data Model for full rationale)
+# ---------------------------------------------------------------------------
+data_model:
+  strategy: unified_table_plus_views
+  summary: >-
+    Agency-style sources (clinics, respite, CalAIM, rentals, general resources)
+    merge into ONE searchable `agencies` table carrying `source` + `category`
+    columns, so a single query can return cross-source matches where coverage
+    overlaps. Doctors stay in a separate `doctors` table (different schema).
+    Per-category SQL VIEWS sit on top for clean category routing.
+  tables:
+    - name: doctors
+      sources: [cms_doctors]
+      grain: clinician x enrollment x practice-location (Sacramento filtered)
+    - name: agencies
+      sources:
+        - sac_limhp_medical
+        - sac_limhp_mh_clinic
+        - sac_mh_respite
+        - dhcs_calaim
+        - affordable_housing
+        - general_resources
+      grain: one row per agency x category
+  views:
+    - {name: view_medical_clinic,   where: "category = 'Medical Clinic'"}
+    - {name: view_mental_health,    where: "category = 'Mental Health Clinic'"}
+    - {name: view_mh_respite,       where: "category = 'Mental Health Respite'"}
+    - {name: view_calaim,           where: "category = 'CalAIM Providers'"}
+    - {name: view_housing,          where: "category = 'Housing'"}
+    - {name: view_general,          where: "category NOT IN (above)"}
+
+# ---------------------------------------------------------------------------
+# SOURCES
+# ---------------------------------------------------------------------------
+sources:
+
+  # ===== NECESSARY ========================================================
+
+  - id: cms_doctors
+    title: CMS Doctors and Clinicians National Downloadable File
+    tier: necessary
+    category: HealthScout
+    target_table: doctors
+    why: >-
+      Upstream of the ~17k-row Sacramento doctor database (sacramento.db).
+      Provides clinician name, specialty, credential, gender, telehealth flag,
+      facility, and practice address — the core of the "find a doctor" flow.
+    format: CSV (~9 GB national; filter to CA/Sacramento)
+    scraper_type: cms_api
+    upstream: https://data.cms.gov/provider-data/dataset/mj5m-pzi6
+    download: "resolve:cms_metastore"
+    download_resolver:
+      api: https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/mj5m-pzi6?show-reference-ids
+      json_path: distribution[0].data.downloadURL
+      filename: DAC_NationalDownloadableFile.csv
+      reason: download URL embeds a content hash that rotates each refresh
+    data_dictionary: https://data.cms.gov/provider-data/sites/default/files/data_dictionaries/physician/DOC_Data_Dictionary.pdf
+    update_cadence: monthly (next refresh advertised ~the 11th)
+    local_raw:
+      - "../Pointer Databases/CMS- National Directory of Doctors & clinicians.csv"   # canonical (preserves leading zeros)
+      - "../Pointer Databases/HealthScout_9_18_2024.xlsx"
+      - "../Pointer Databases/HealthScoutDatabase.csv"            # preprocessed intermediate
+    join_keys: [npi, ind_pac_id, adrs_id]
+    enriched_by: [primary_description, mcp_directory, transportation_directory]
+    license: Public Domain (CMS / U.S. Government work)
+    notes: >-
+      Filter State == 'CA' then City/Town in Sacramento metro. Reuse the
+      normalization in pointer-fork/scripts/rebuild_healthscout_db.py
+      (column standardization + phone -> 1-XXX-XXX-XXXX) before writing
+      `sacramento`/`doctors`.
+
+  - id: sac_limhp_medical
+    title: Sacramento County Medical / FQHC Clinic List
+    tier: necessary
+    category: Medical Clinic
+    target_table: agencies
+    why: >-
+      Low/no-cost medical clinics for uninsured users (Medical_Clinic route).
+    format: PDF (provider directory) / XLSX export
+    scraper_type: pdf_llm
+    upstream: https://dhs.saccounty.gov/PRI/Pages/Primary-Health.aspx
+    download: "manual:download newest provider directory PDF to reference_database/Therapy - Social Services/"
+    update_cadence: irregular (county republishes a few times a year)
+    local_raw:
+      - "../Pointer Databases/Health-Centers-09-18-2024.xlsx"
+      - "../Pointer Databases/Clinic Directory.csv"
+    join_keys: [agency, address]
+    license: Public record (county directory)
+    notes: >-
+      PDF -> table via the PDF_Analyzer pipeline (pdfplumber + GPT-vision).
+      See SCRAPER_PLAN.md §PDF sources.
+
+  - id: sac_limhp_mh_clinic
+    title: Sacramento LI-MHP Medi-Cal Mental Health Provider / Practitioner Directory
+    tier: necessary
+    category: Mental Health Clinic
+    target_table: agencies
+    why: >-
+      Therapist / psychiatric clinic listings for the MH_Clinic route
+      (uninsured + Medi-Cal mental health).
+    format: PDF + DOCX
+    scraper_type: pdf_llm
+    upstream: https://dhs.saccounty.gov/BHS/Pages/Beneficiary-Services/GI-Provider-Directory.aspx
+    download: "manual:download newest LI-MHP provider list to reference_database/Therapy - Social Services/"
+    update_cadence: irregular (county republishes periodically)
+    local_raw:
+      - "reference_database/Therapy - Social Services/LI-MHP Medi-Cal Provider List-English.pdf"
+      - "reference_database/Therapy - Social Services/LI-MHP-Medi-Cal-Practitioner-Directory-English.pdf"
+    join_keys: [agency, address]
+    license: Public record (county directory)
+    notes: PDF -> table via PDF_Analyzer pipeline.
+
+  - id: sac_mh_respite
+    title: Sacramento PEI & MH Respite Services Provider List
+    tier: necessary
+    category: Mental Health Respite
+    target_table: agencies
+    why: >-
+      Crisis / safe-place respite resources for the MH_Respite route.
+    format: PDF
+    scraper_type: pdf_llm
+    upstream: https://dhs.saccounty.gov/BHS/Pages/Prevention-and-Early-Intervention/GI-PEI.aspx
+    download: "manual:download newest PEI/Respite list to reference_database/Therapy - Social Services/"
+    update_cadence: irregular
+    local_raw:
+      - "reference_database/Therapy - Social Services/LI-PEI-and-MH-Respite-Services-Provider-List-English.pdf"
+    join_keys: [agency, address]
+    license: Public record (county directory)
+    notes: PDF -> table via PDF_Analyzer pipeline.
+
+  - id: dhcs_calaim
+    title: DHCS CalAIM Community Supports / ECM Provider Lists
+    tier: necessary
+    category: CalAIM Providers
+    target_table: agencies
+    why: >-
+      CalAIM housing + Medi-Cal support providers (CALAIM_Providers route).
+    format: HTML / XLSX per managed-care plan
+    scraper_type: html_bs4
+    upstream: https://www.dhcs.ca.gov/CalAIM/ECM/Pages/Home.aspx
+    download: "scrape:per-plan provider lists linked from the ECM/Community Supports page"
+    update_cadence: quarterly-ish (plans update rosters)
+    local_raw: []   # current CALAIM_Providers.csv was hand-compiled
+    join_keys: [agency, insurance]
+    license: Public (state program rosters); verify per-plan terms
+    notes: >-
+      BeautifulSoup over the DHCS ECM page to enumerate per-plan roster links,
+      then parse each (HTML table or XLSX). Carry the managed-care plan into
+      the `insurance` column.
+
+  - id: affordable_housing
+    title: Affordable / Tax-Credit Rental Housing (Sacramento)
+    tier: necessary
+    category: Housing
+    target_table: agencies
+    why: >-
+      Subsidized / tax-credit apartment communities for the Rentals route.
+    format: XLSX
+    scraper_type: manual_xlsx
+    upstream: https://www.treasurer.ca.gov/ctcac/projects.asp   # CTCAC project lists
+    download: "manual:export newest TCAC/SHRA affordable project list"
+    secondary_upstream: https://www.shra.org/                  # Sacramento Housing & Redevelopment Agency
+    update_cadence: annual (CTCAC placed-in-service lists)
+    local_raw:
+      - "../Pointer Databases/Affordable Housing.xlsx"
+    join_keys: [agency, address]
+    license: Public (state/agency project lists)
+    notes: >-
+      Filter to Sacramento County. Map project + management phone into one row.
+
+  - id: general_resources
+    title: FSC / 211 Sacramento General Resource Directory
+    tier: necessary
+    category: General         # fans out to many sub-categories via service_category
+    target_table: agencies
+    why: >-
+      Fallback directory (shelters, food, legal, veterans, etc.) for the
+      General_Resources route when no specific table matches.
+    format: HTML directory / CSV
+    scraper_type: html_bs4
+    upstream: https://www.211sacramento.org/211/
+    download: "scrape:211 Sacramento resource categories"
+    update_cadence: continuous (211 maintained)
+    local_raw:
+      - "../Pointer Databases/General_Resources.csv"
+    join_keys: [agency, service_category]
+    license: Verify 211/United Way terms before redistribution
+    notes: >-
+      service_category drives the canonical category mapping
+      (see GENERAL_CATEGORY_MAP in pointer-fork/scripts/build_agencies_csv.py).
+
+  - id: pointer_router_config
+    title: Pointer Router Config (keywords + few-shot routing)
+    tier: necessary
+    category: null
+    target_table: null
+    why: >-
+      Not a data table — the routing brain. Maps user intent to a target
+      database with keywords and few-shot examples.
+    format: CSV
+    scraper_type: config
+    upstream: hand-maintained
+    download: null
+    update_cadence: on product change
+    local_raw:
+      - "../Pointer Databases/000 - Pointer.csv"
+    join_keys: []
+    license: Internal
+    notes: Keep in sync with seeds/query_categories/*.json in pointer-fork.
+
+  # ===== ENRICHMENT =======================================================
+
+  - id: primary_description
+    title: Specialty -> Ailments/Procedures Lookup
+    tier: enrichment
+    category: null
+    target_table: doctors   # decorates doctor rows
+    why: >-
+      Translates pri_spec codes into plain-language ailments so users can
+      search by symptom ("foot pain") not specialty ("podiatry").
+    format: CSV
+    scraper_type: manual_xlsx
+    upstream: hand-curated
+    download: null
+    update_cadence: rarely
+    local_raw:
+      - "../Pointer Databases/Primary Description.csv"
+    join_keys: [pri_spec]
+    license: Internal
+    notes: Join on pri_spec to add an ailments_procedures column.
+
+  - id: mcp_directory
+    title: DHCS Medi-Cal Managed Care Provider Directory (Sacramento, geocoded)
+    tier: enrichment
+    category: null
+    target_table: doctors
+    why: >-
+      Maps Medi-Cal managed-care plans to providers; used for the insurance
+      filter. The upstream is the STATEWIDE DHCS geocoded provider directory
+      (3.27M rows, ~1.1 GB, all CA counties). It has been REDUCED to the
+      312,822 Sacramento rows and stored as zstd parquet (~6.5 MB, a 169x
+      shrink). The 1.1 GB statewide original was moved to ../unnessecary/.
+    format: Parquet (zstd, Sacramento-only, geocoded)
+    scraper_type: manual_xlsx
+    upstream: https://data.chhs.ca.gov/dataset/profile-of-enrolled-medi-cal-managed-care-providers
+    download: null
+    update_cadence: periodic (DHCS republishes)
+    local_raw:
+      - "../Pointer Databases/MCP Directory - Sacramento.parquet"   # 6.5 MB, 312,822 rows x 32 cols
+    join_keys: [managed_care_plan]
+    license: CHHS / DHCS Terms of Use
+    notes: >-
+      Columns include ManagedCarePlan, Telehealth, SeesChildren, BHIndicator,
+      and lat/long — richer than CMS for plan filtering. Already filtered to
+      County == 'Sacramento' and stored as zstd parquet. To refresh: re-download
+      the statewide file, filter County == 'Sacramento', write parquet.
+
+  - id: transportation_directory
+    title: NEMT / Transportation Benefit Directory
+    tier: enrichment
+    category: null
+    target_table: doctors
+    why: >-
+      Adds transportation provider + phone + benefit description per plan
+      (the ModivCare / ride-to-care info attached to each doctor row).
+    format: XLSX
+    scraper_type: manual_xlsx
+    upstream: per-plan member transportation pages
+    download: null
+    update_cadence: rarely
+    local_raw:
+      - "../Pointer Databases/Transportation Directory.xlsx"
+    join_keys: [managed_care_plan]
+    license: Plan member materials
+
+  # ===== ARCHIVE (chaff) ==================================================
+
+  - id: hcai_homeless_encounters
+    title: HCAI Hospital Encounters for Homeless Patients
+    tier: archive
+    category: null
+    target_table: null
+    why: >-
+      Population-level analytics (IP/ED counts). Not consumed by the router.
+      Kept for research / grant-writing context only.
+    format: CSV / XLSX
+    scraper_type: ckan_api
+    upstream: https://data.chhs.ca.gov/dataset/hospital-encounters-for-homeless-patients
+    download: https://data.chhs.ca.gov/dataset/b0397867-b5c2-413e-8337-63582ab5ffd5/resource/cb97599a-301b-43b9-bd28-4d9c1b769403/download/hospital-encounters-for-homeless-patients-e2ezn1w9.zip
+    update_cadence: annual
+    local_raw: []   # removed from disk during reorg — re-download from `download` if needed
+    join_keys: []
+    license: CHHS Terms of Use
+    notes: >-
+      The local copy was deleted during the reorg. Re-fetch from the download
+      URL (newer 2023-2024 vintages exist upstream) only if analytics are needed.
+
+  - id: hospital_financial
+    title: HCAI Hospital Annual Financial Data
+    tier: archive
+    category: null
+    target_table: null
+    why: Hospital finance analytics. Not router-consumed.
+    format: XLSX / XLS
+    scraper_type: ckan_api
+    upstream: https://hcai.ca.gov/data-and-reports/cost-transparency/
+    download: null
+    update_cadence: annual
+    local_raw:
+      - "Discharge Data 2022pddpivot.xlsx"            # in Datasets/
+      - "2022top25msdrg_benchmark_20230701.xls"       # in Datasets/
+    join_keys: []
+    license: HCAI Terms of Use
+    notes: >-
+      'Hospital Annual Financial Data/' folder was removed during the reorg.
+      The two pivot files remain in Datasets/; re-fetch the rest from upstream
+      if needed.

@@ -1,0 +1,8 @@
+streamlit
+openai
+weaviate-client
+python-dotenv
+tabulate
+scipy
+sounddevice
+streamlit_webrtc

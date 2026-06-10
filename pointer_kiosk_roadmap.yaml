@@ -1,0 +1,800 @@
+roadmap_name: pointer_kiosk_ux_port
+version: 0.1.0
+created_for: Pointer / TalkBox kiosk network
+primary_goal: >-
+  Port the existing Pointer web app into a keypad-first, voice-assisted kiosk UX
+  for a 6-inch screen, where a user can ask for help, receive numbered resource
+  results, select a resource with ATM number keys, and call only allowlisted numbers.
+
+agent_prompt: |
+  You are the implementation agent for the Pointer Kiosk UX port.
+
+  Your job is to convert the existing Pointer app into a public-service kiosk
+  interface without breaking the current web demo or admin workflows.
+
+  Work in small, reviewable phases. For every phase:
+  1. Inspect the existing repo before modifying files.
+  2. Preserve the existing /api/query behavior unless the phase explicitly changes it.
+  3. Prefer additive routes, components, and endpoints over risky rewrites.
+  4. Keep the kiosk UI usable on a 6-inch screen with only number keys.
+  5. Treat the Raspberry Pi as a thin API/browser terminal, not as the source of truth.
+  6. Never allow arbitrary dialing from the kiosk. Calls must go through backend validation.
+  7. Make the normal web frontend usable from anywhere as a public demo, while the kiosk
+     route uses device identity, rate limits, and locked-down controls.
+  8. Include tests or manual verification steps before moving to the next phase.
+  9. Leave clear notes in docs/kiosk/ after every completed milestone.
+
+  The ideal UX is extremely simple:
+  - User walks up.
+  - Screen shows a short menu and always-visible controls.
+  - User speaks or types what they need.
+  - Pointer returns numbered resources.
+  - User presses a number to select.
+  - User presses green or # to call.
+  - User presses red or 0 to go back/hang up.
+
+  Optimize for reliability, abuse resistance, accessibility, and field maintainability.
+
+source_context:
+  existing_backend:
+    framework: FastAPI
+    current_public_endpoints:
+      - GET /api/health
+      - POST /api/sms-query
+      - POST /api/auth/register
+      - POST /api/auth/jwt/login
+      - POST /api/auth/jwt/logout
+    current_authenticated_endpoints:
+      - POST /api/query
+      - GET /api/users/me
+      - PATCH /api/users/me
+    existing_query_response_shape:
+      markdown: string
+      results:
+        type: agencies | doctors
+        category: string | null
+        items_agencies:
+          - name: string
+            phone: string | null
+            address: string | null
+            description: string | null
+            insurance: string | null
+            tags: string | null
+        items_doctors:
+          - first_name: string | null
+            last_name: string | null
+            phone: string | null
+            specialty: string | null
+            address: string | null
+            insurance: string | null
+            transportation_provider: string | null
+            transportation_phone: string | null
+  existing_frontend:
+    framework: React + Vite
+    current_main_route: /
+    current_query_client: frontend/src/lib/api.js
+    current_chat_hook: frontend/src/hooks/useChat.js
+    current_result_cards: frontend/src/components/ResultCards.jsx
+  existing_twilio:
+    implemented_now:
+      - SMS webhook receives Body and From
+      - asynchronous SMS response uses existing query handler
+    desired_next:
+      - Twilio Voice browser calling
+      - backend-validated allowlisted calls
+      - call status callbacks and logs
+
+product_principles:
+  - keypad_first_not_touchscreen_first
+  - six_inch_screen_single_focus_layout
+  - voice_assisted_but_not_voice_dependent
+  - cloud_source_of_truth
+  - pi_as_thin_kiosk_terminal
+  - no_arbitrary_dialing
+  - public_demo_and_kiosk_mode_share_components
+  - admin_configures_behavior_without_redeploying
+  - every_machine_has_device_identity
+  - every_call_has_a_traceable_session_id
+  - emergency_features_are_separate_and_deliberate
+
+ux_constraints:
+  screen:
+    size: 6 inch
+    layout_rule: show one primary thing at a time
+    avoid:
+      - dense card grids
+      - tiny buttons
+      - scroll-heavy chat transcripts
+      - normal desktop header chrome
+  input:
+    required_initial_controls:
+      - 12_key_atm_keypad
+    key_mapping_v1:
+      key_1_to_9: select visible menu item or resource number
+      key_0: back_or_home
+      key_star: repeat_or_help
+      key_hash: call_selected_resource_or_submit
+    optional_extra_buttons:
+      green: call_or_confirm
+      red: hang_up_cancel_or_back
+      yellow: repeat_current_screen
+      blue: start_voice_input
+  audio:
+    recommended_first_hardware:
+      mic: basic USB microphone or USB conference speakerphone
+      speaker: cheap powered speaker or USB speaker
+      camera: avoid in v1 unless needed for microphone only
+    reason: >-
+      A webcam adds privacy and signage complexity. Audio-only is simpler,
+      cheaper, and less intimidating for a public homelessness-service kiosk.
+
+voice_commands:
+  design: predefined_actions_resolved_by_stt_then_embedding_similarity
+  always_available_commands:
+    - phrase: help
+      action: HELP
+    - phrase: repeat
+      action: REPEAT_SCREEN
+    - phrase: go back
+      action: BACK
+    - phrase: start over
+      action: HOME
+    - phrase: call this one
+      action: CALL_SELECTED
+    - phrase: hang up
+      action: HANG_UP
+    - phrase: next
+      action: NEXT_ITEM
+    - phrase: previous
+      action: PREVIOUS_ITEM
+    - phrase: shelter
+      action: QUICK_QUERY_SHELTER
+    - phrase: food
+      action: QUICK_QUERY_FOOD
+    - phrase: doctor
+      action: QUICK_QUERY_MEDICAL
+    - phrase: mental health
+      action: QUICK_QUERY_MENTAL_HEALTH
+    - phrase: transportation
+      action: QUICK_QUERY_TRANSPORT
+    - phrase: call two one one
+      action: CALL_211
+  implementation_rule: >-
+    Voice should never directly dial a number. Voice resolves to an action,
+    and the backend validates whether that action is allowed in the current state.
+
+architecture:
+  deployment_shape:
+    cloud:
+      - pointer_frontend
+      - pointer_backend
+      - postgres_pgvector
+      - twilio_voice_and_sms
+      - admin_portal
+      - logs_and_monitoring
+    kiosk_device:
+      - raspberry_pi_or_mini_pc
+      - chromium_kiosk_browser
+      - keypad_or_usb_encoder
+      - microphone
+      - speaker
+      - optional_watchdog_service
+  modes:
+    web_demo:
+      route: /demo
+      auth: optional_or_demo_session
+      features:
+        - typed_query
+        - simulated_keypad
+        - microphone_if_browser_allows
+        - simulated_call_flow_or_real_allowlisted_call_if_authorized
+    kiosk:
+      route: /kiosk
+      auth: device_token_or_signed_device_session
+      features:
+        - keypad_only_navigation
+        - voice_input
+        - text_to_speech
+        - allowlisted_calls
+        - closed_hours_rules
+        - auto_reset
+    admin:
+      route: /admin
+      auth: staff_login_required
+      features:
+        - manage_kiosks
+        - manage_resource_allowlist
+        - view_call_logs
+        - set_hours
+        - configure_voice_commands
+        - review_device_health
+
+backend_new_endpoints:
+  kiosk:
+    - method: GET
+      path: /api/kiosk/config
+      purpose: return device-specific menu, hours, emergency policy, and feature flags
+    - method: POST
+      path: /api/kiosk/session
+      purpose: create anonymous kiosk session for analytics and rate limiting
+    - method: POST
+      path: /api/kiosk/query
+      purpose: run Pointer query and return numbered, display-safe resources
+    - method: POST
+      path: /api/kiosk/action/resolve
+      purpose: map text or speech transcript to predefined action
+    - method: POST
+      path: /api/kiosk/call/token
+      purpose: issue short-lived Twilio Voice token for a validated resource selection
+    - method: POST
+      path: /api/kiosk/call/twiml
+      purpose: return TwiML Dial only for approved call sessions
+    - method: POST
+      path: /api/kiosk/call/status
+      purpose: receive Twilio call lifecycle callbacks
+    - method: POST
+      path: /api/kiosk/events
+      purpose: record button presses, state transitions, failures, and resets
+    - method: POST
+      path: /api/kiosk/heartbeat
+      purpose: record device uptime, app version, network status, and peripheral status
+  admin:
+    - method: GET
+      path: /api/admin/kiosks
+      purpose: list devices and health
+    - method: POST
+      path: /api/admin/kiosks
+      purpose: register a kiosk device
+    - method: PATCH
+      path: /api/admin/kiosks/{kiosk_id}
+      purpose: update location, hours, status, feature flags, and notes
+    - method: GET
+      path: /api/admin/calls
+      purpose: view call logs and outcomes
+    - method: GET
+      path: /api/admin/resources/allowlist
+      purpose: review callable resources
+    - method: PATCH
+      path: /api/admin/resources/{resource_id}/allowlist
+      purpose: approve, suspend, or annotate a callable number
+
+database_additions:
+  tables:
+    kiosk_devices:
+      fields:
+        - id
+        - slug
+        - display_name
+        - location_label
+        - install_address
+        - status
+        - device_secret_hash
+        - hours_json
+        - feature_flags_json
+        - created_at
+        - updated_at
+    kiosk_sessions:
+      fields:
+        - id
+        - kiosk_id
+        - started_at
+        - ended_at
+        - reset_reason
+        - language
+        - last_state
+    kiosk_events:
+      fields:
+        - id
+        - kiosk_id
+        - session_id
+        - event_type
+        - event_payload_json
+        - created_at
+    resource_call_allowlist:
+      fields:
+        - id
+        - resource_type
+        - resource_id
+        - normalized_phone
+        - label
+        - status
+        - approved_by
+        - notes
+        - created_at
+        - updated_at
+    call_sessions:
+      fields:
+        - id
+        - kiosk_id
+        - kiosk_session_id
+        - resource_type
+        - resource_id
+        - normalized_destination_phone
+        - twilio_call_sid
+        - status
+        - started_at
+        - ended_at
+        - duration_seconds
+        - failure_reason
+        - created_at
+        - updated_at
+    predefined_actions:
+      fields:
+        - id
+        - action_code
+        - display_label
+        - canonical_phrase
+        - alternate_phrases_json
+        - category_query
+        - enabled
+        - created_at
+        - updated_at
+    mailbox_threads_future:
+      fields:
+        - id
+        - public_pin_hash
+        - expires_at
+        - status
+        - created_at
+    mailbox_messages_future:
+      fields:
+        - id
+        - thread_id
+        - direction
+        - body_or_audio_url
+        - created_at
+
+frontend_files_to_add:
+  - frontend/src/pages/KioskPage.jsx
+  - frontend/src/pages/DemoKioskPage.jsx
+  - frontend/src/pages/AdminPage.jsx
+  - frontend/src/components/kiosk/KioskShell.jsx
+  - frontend/src/components/kiosk/KioskStatusBar.jsx
+  - frontend/src/components/kiosk/KioskMenu.jsx
+  - frontend/src/components/kiosk/KioskResourceList.jsx
+  - frontend/src/components/kiosk/KioskResourceDetail.jsx
+  - frontend/src/components/kiosk/KioskCallScreen.jsx
+  - frontend/src/components/kiosk/KioskFooterCommands.jsx
+  - frontend/src/components/kiosk/SimulatedKeypad.jsx
+  - frontend/src/hooks/useKioskStateMachine.js
+  - frontend/src/hooks/useKeypadInput.js
+  - frontend/src/hooks/useSpeechActions.js
+  - frontend/src/hooks/useKioskVoiceCall.js
+  - frontend/src/lib/kioskApi.js
+
+backend_files_to_add:
+  - backend/src/presentation/kiosk_routes.py
+  - backend/src/presentation/admin_kiosk_routes.py
+  - backend/src/application/services/kiosk_query_service.py
+  - backend/src/application/services/kiosk_action_resolver.py
+  - backend/src/application/services/kiosk_call_service.py
+  - backend/src/application/services/kiosk_event_service.py
+  - backend/src/infrastructure/twilio/twilio_voice_service.py
+  - backend/src/infrastructure/persistence/kiosk_models.py
+  - backend/alembic/versions/003_kiosk_devices_calls_actions.py
+
+docs_to_add:
+  - docs/kiosk/README.md
+  - docs/kiosk/ux-state-machine.md
+  - docs/kiosk/keypad-mapping.md
+  - docs/kiosk/hardware-bringup.md
+  - docs/kiosk/twilio-voice-flow.md
+  - docs/kiosk/admin-portal.md
+  - docs/kiosk/field-install-checklist.md
+
+milestones:
+  - id: M0
+    name: baseline_repo_and_branch
+    goal_state: >-
+      A safe development branch exists, current app still runs, and all baseline
+      API/UI behavior is documented before kiosk changes begin.
+    agent_tasks:
+      - Create branch feature/kiosk-ux-port.
+      - Run frontend build.
+      - Run backend tests or at minimum start backend and hit /api/health.
+      - Confirm /api/query response shape using a known query.
+      - Document current routes and data shape in docs/kiosk/README.md.
+    human_tasks:
+      - Confirm which environment is the canonical staging deployment.
+      - Confirm whether the current production site requires login or Cloudflare access.
+      - Provide any secrets through environment manager, not chat or git.
+    checks:
+      - Frontend build succeeds.
+      - Backend health endpoint returns ok.
+      - Existing SMS webhook remains untouched.
+      - No secret values are committed.
+    exit_criteria:
+      - docs/kiosk/README.md includes baseline architecture and run instructions.
+
+  - id: M1
+    name: six_inch_kiosk_ui_skeleton
+    goal_state: >-
+      /kiosk loads a full-screen 6-inch-friendly interface with no login screen,
+      no desktop-style header, and a keypad-readable menu.
+    agent_tasks:
+      - Add /kiosk route without changing existing / route.
+      - Build KioskShell with fixed regions: status, content, footer commands.
+      - Add initial menu with 1-9 numbered actions and persistent 0/*/# hints.
+      - Add CSS viewport profile for 6-inch landscape and portrait testing.
+      - Add DemoKioskPage with simulated keypad for browser demos.
+    human_tasks:
+      - Choose target screen orientation for the first ATM install.
+      - Measure actual visible screen resolution of the 6-inch display.
+      - Decide final public-facing name: Pointer, TalkBox, Pointer Phone, etc.
+    checks:
+      - / works as before.
+      - /kiosk works with keyboard only.
+      - Text is readable at arm's length on a 6-inch display.
+      - No scroll is required on the idle menu.
+    exit_criteria:
+      - A user can navigate the idle menu using only number keys, 0, *, and #.
+
+  - id: M2
+    name: keypad_state_machine
+    goal_state: >-
+      Kiosk navigation is controlled by a deterministic state machine that can be
+      used by physical ATM keys, a browser keyboard, or demo buttons.
+    agent_tasks:
+      - Implement useKioskStateMachine.
+      - Implement useKeypadInput.
+      - Map keys 1-9, 0, *, # to state transitions.
+      - Add screens: IDLE_MENU, QUERY_INPUT, RESULTS_LIST, RESOURCE_DETAIL, CALL_CONFIRM, CALL_ACTIVE, CLOSED, ERROR.
+      - Add auto-reset timer after inactivity.
+      - Add event logging stubs to /api/kiosk/events, even if backend initially no-ops.
+    human_tasks:
+      - Identify how ATM keypad outputs input: USB HID, GPIO, matrix, serial, or unknown.
+      - If unknown, test keypad with a laptop and document what each key emits.
+      - Decide whether green/red hardware buttons exist in v1 or whether #/0 act as call/back.
+    checks:
+      - Pressing 0 always returns to the previous safe screen or home.
+      - Pressing * always repeats/help-prompts the current screen.
+      - Pressing # never calls unless a resource has been selected and backend validates it.
+      - Inactivity returns to IDLE_MENU.
+    exit_criteria:
+      - Full kiosk UX can be driven from a normal USB keyboard number row.
+
+  - id: M3
+    name: numbered_resource_results
+    goal_state: >-
+      Pointer query results are transformed into numbered, compact resource screens
+      optimized for keypad selection rather than chat bubbles or card grids.
+    agent_tasks:
+      - Add /api/kiosk/query wrapper around existing QueryHandler.
+      - Normalize results into display_items numbered 1-9.
+      - Prefer one selected resource at a time on small screen.
+      - Add RESULTS_LIST and RESOURCE_DETAIL views.
+      - Preserve markdown fallback but do not render dense markdown in kiosk mode.
+      - Add empty-state behavior that offers 211 and broad categories.
+    human_tasks:
+      - Identify the top 6 starting categories for the home screen.
+      - Review whether 211 should appear as item 9, item 0, or persistent footer option.
+      - Decide whether result randomization is acceptable for kiosk UX or whether ranking should be deterministic.
+    checks:
+      - Query for shelter returns numbered options.
+      - Press 1 selects first resource.
+      - Press 2 selects second resource.
+      - Press 0 returns to results or home.
+      - Long descriptions are truncated cleanly.
+    exit_criteria:
+      - A user can search, view 1-5 resources, select one, and return home using only number keys.
+
+  - id: M4
+    name: predefined_voice_actions
+    goal_state: >-
+      Speech input resolves to predefined actions or safe Pointer category queries,
+      instead of uncontrolled natural-language commands.
+    agent_tasks:
+      - Add predefined_actions seed data.
+      - Add backend action resolver service.
+      - Implement /api/kiosk/action/resolve.
+      - In frontend, capture browser speech transcript where available.
+      - Send transcript to backend and receive action_code plus confidence.
+      - Add low-confidence fallback: show top 3 options and ask user to press 1-3.
+    human_tasks:
+      - Record or write the exact voice prompts you want users to hear.
+      - Approve the initial command vocabulary.
+      - Decide whether voice input is push-to-talk, timed listening, or both.
+      - Test microphone placement in the ATM shell before final mounting.
+    checks:
+      - Saying shelter routes to shelter query/action.
+      - Saying repeat triggers repeat, not a search.
+      - Saying call this one only works if a resource is selected.
+      - Unknown speech does not dial or submit unsafe actions.
+    exit_criteria:
+      - Voice can operate menu, repeat, back, category search, and call confirmation safely.
+
+  - id: M5
+    name: text_to_speech_and_audio_feedback
+    goal_state: >-
+      The kiosk can read prompts and selected resources aloud, and can provide
+      clear audio confirmation for navigation and errors.
+    agent_tasks:
+      - Add browser TTS helper with queue/cancel support.
+      - Add repeat current screen command.
+      - Add short spoken summaries for resource cards.
+      - Add volume test page in /admin or /demo.
+      - Ensure TTS does not overlap active calls.
+    human_tasks:
+      - Buy or temporarily install cheap powered speakers or USB speaker.
+      - Test whether ATM shell muffles audio.
+      - Decide if audio should default loud, medium, or adjustable by admin only.
+    checks:
+      - Pressing * repeats the current screen aloud.
+      - Selecting a resource reads its name and short description.
+      - Starting a call stops TTS.
+      - Ending a call returns to normal audio prompts.
+    exit_criteria:
+      - A low-vision user can navigate core flow with keypad plus speech output.
+
+  - id: M6
+    name: twilio_voice_allowlisted_calling
+    goal_state: >-
+      The kiosk can place a speakerphone call to a selected allowlisted resource
+      through Twilio Voice, with call status logs and no arbitrary dialing.
+    agent_tasks:
+      - Add resource_call_allowlist table and migration.
+      - Add call_sessions table and migration.
+      - Add Twilio Voice service wrapper.
+      - Add /api/kiosk/call/token.
+      - Add /api/kiosk/call/twiml.
+      - Add /api/kiosk/call/status callback endpoint.
+      - Add frontend useKioskVoiceCall hook.
+      - Add CALL_CONFIRM and CALL_ACTIVE screens.
+      - Add rate limits per kiosk and per session.
+    human_tasks:
+      - Create or configure Twilio Voice app.
+      - Buy or assign Twilio phone number.
+      - Decide caller ID behavior.
+      - Confirm whether calls should ever be recorded. Recommended v1: no recording.
+      - Approve initial callable resource numbers.
+      - Write public signage: calls may be logged for operations; do not share sensitive info.
+    checks:
+      - Kiosk cannot dial a manually typed phone number.
+      - Backend rejects non-allowlisted resource_id.
+      - Twilio callback updates call status.
+      - Red/0 hangs up or exits active call state.
+      - Failed call returns user to selected resource with options.
+    exit_criteria:
+      - End-to-end call from /kiosk to one approved test number succeeds and is logged.
+
+  - id: M7
+    name: admin_portal_v1
+    goal_state: >-
+      Staff can manage kiosk devices, view call/event logs, and approve or suspend
+      callable resource numbers from a web admin portal.
+    agent_tasks:
+      - Add /admin route guarded by existing auth.
+      - Add device list and detail pages.
+      - Add call logs table.
+      - Add resource allowlist review table.
+      - Add kiosk config editor for hours and feature flags.
+      - Add basic export CSV for calls/events.
+    human_tasks:
+      - Decide who gets admin access.
+      - Define operational statuses: testing, active, disabled, maintenance, retired.
+      - Review provider-facing call policy.
+      - Decide how often allowlist should be reviewed.
+    checks:
+      - Non-admin user cannot access /admin.
+      - Admin can disable a kiosk.
+      - Disabled kiosk cannot place calls.
+      - Admin can suspend a resource number.
+      - Suspended number cannot be called from kiosk.
+    exit_criteria:
+      - One machine can be remotely disabled and re-enabled from admin UI.
+
+  - id: M8
+    name: public_demo_mode
+    goal_state: >-
+      The kiosk UX can be demonstrated from any normal browser without special
+      hardware, while real calling remains restricted.
+    agent_tasks:
+      - Add /demo route using same kiosk components.
+      - Add simulated keypad component.
+      - Add demo-only fake call mode unless authenticated/authorized.
+      - Add shareable demo URL.
+      - Add visual badge: DEMO MODE, NOT A LIVE PUBLIC KIOSK.
+    human_tasks:
+      - Decide whether public demo should show real provider phone numbers.
+      - Decide whether demo calls go to a test number only.
+      - Prepare a 60-second walkthrough script for funders and partners.
+    checks:
+      - Demo loads on desktop and phone.
+      - Demo does not require physical keypad.
+      - Demo cannot abuse outbound calling.
+      - Kiosk and demo share core components.
+    exit_criteria:
+      - A funder can open a URL and understand the product in under one minute.
+
+  - id: M9
+    name: raspberry_pi_kiosk_bringup
+    goal_state: >-
+      A Raspberry Pi boots directly into the kiosk route, accepts keypad input,
+      uses mic/speaker, and recovers from browser crashes.
+    agent_tasks:
+      - Add docs/kiosk/hardware-bringup.md.
+      - Add sample systemd service or labwc autostart file for Chromium kiosk.
+      - Add health check page for mic, speaker, keypad, network, and backend reachability.
+      - Add heartbeat payload fields for hardware status.
+    human_tasks:
+      - Acquire Raspberry Pi 5 or equivalent mini PC.
+      - Acquire official-quality power supply.
+      - Acquire microSD or SSD.
+      - Acquire USB mic or USB conference speakerphone.
+      - Acquire cheap powered speakers if using standalone mic.
+      - Test ATM keypad output.
+      - Decide whether to use USB encoder or GPIO wiring for buttons.
+      - Install plexiglass screen protection.
+      - Confirm conduit power is safe and code-compliant with site owner/electrician.
+    checks:
+      - Device boots to /kiosk without keyboard/mouse.
+      - Browser restarts if killed.
+      - Network loss shows offline screen.
+      - Network return restores kiosk without manual intervention.
+      - Keypad works through plexiglass/ATM panel.
+    exit_criteria:
+      - Prototype can run unattended for 24 hours indoors.
+
+  - id: M10
+    name: field_hardening_v1
+    goal_state: >-
+      The kiosk is safe enough for a limited public pilot with remote monitoring,
+      physical durability basics, closed-hours behavior, and abuse limits.
+    agent_tasks:
+      - Add closed-hours screen and config.
+      - Add per-device and per-destination rate limits.
+      - Add watchdog documentation.
+      - Add tamper/offline event types.
+      - Add privacy-preserving log retention config.
+      - Add admin visible device heartbeat status.
+    human_tasks:
+      - Create installation agreement with property owner.
+      - Mount hardware securely.
+      - Add weather and vandal resistance appropriate to location.
+      - Add public signage and instructions.
+      - Confirm local policy for 211, crisis lines, and emergency instructions.
+      - Decide pilot hours.
+      - Create provider contact sheet for complaints or wrong numbers.
+    checks:
+      - Kiosk obeys configured hours.
+      - 211 or emergency instruction remains visible when closed if configured.
+      - Repeated call attempts are rate-limited.
+      - Admin can see whether device is online.
+      - Logs avoid unnecessary sensitive user content.
+    exit_criteria:
+      - Ready for supervised public pilot.
+
+  - id: M11
+    name: mailbox_pin_future_design
+    goal_state: >-
+      A future PIN-based message pickup feature is designed but not forced into v1.
+    agent_tasks:
+      - Create docs/kiosk/mailbox-future.md.
+      - Draft mailbox schema but do not enable unless approved.
+      - Define privacy, expiration, and abuse controls.
+      - Add feature flag placeholder: mailbox_enabled=false.
+    human_tasks:
+      - Decide whether users can receive callbacks/messages through Pointer.
+      - Decide PIN length and expiration policy.
+      - Consult privacy/legal advisor before storing voice messages.
+      - Talk to providers about whether they would use callback mailboxes.
+    checks:
+      - No mailbox routes are publicly active by accident.
+      - Feature flag defaults to disabled.
+      - Design doc explains risks and controls.
+    exit_criteria:
+      - Future mailbox feature is planned without delaying kiosk calling MVP.
+
+  - id: M12
+    name: mesh_and_solar_outpost_future_design
+    goal_state: >-
+      The codebase leaves room for LoRa/Meshtastic-style outposts without confusing
+      them with full internet voice kiosks.
+    agent_tasks:
+      - Create docs/kiosk/mesh-outpost-future.md.
+      - Define device class FULL_KIOSK vs LOW_POWER_OUTPOST.
+      - Add placeholder device_class field to kiosk_devices.
+      - Define tiny telemetry payload shape for future low-power devices.
+    human_tasks:
+      - Decide whether the first outpost experiment is telemetry-only or message relay.
+      - Avoid promising live voice over LoRa.
+      - Identify safe locations for solar testing.
+    checks:
+      - Current kiosk does not depend on mesh features.
+      - Future fields are optional and harmless.
+    exit_criteria:
+      - Architecture supports future outposts without bloating MVP.
+
+human_global_checklist:
+  hardware:
+    - Get the old ATM shell dimensions and photos.
+    - Identify exact keypad wiring/output.
+    - Decide whether to preserve existing ATM buttons or replace with USB arcade encoder.
+    - Buy Raspberry Pi 5 or small fanless mini PC.
+    - Buy USB mic or USB conference speakerphone.
+    - Buy cheap powered speaker if needed.
+    - Buy quality power supply and surge protection.
+    - Protect screen with plexiglass or polycarbonate.
+    - Plan ventilation and water resistance.
+  service_and_ops:
+    - Create Twilio Voice configuration.
+    - Keep Twilio SMS working as a separate channel.
+    - Decide which numbers are allowlisted.
+    - Contact critical providers and tell them about the pilot.
+    - Decide hours of operation.
+    - Create signage and privacy language.
+    - Decide who monitors call failures and device outages.
+    - Set a weekly allowlist review process.
+  site_installation:
+    - Confirm written permission from property owner.
+    - Confirm conduit/power routing with qualified person.
+    - Confirm hotspot placement and signal quality.
+    - Confirm physical mounting and anti-theft plan.
+    - Confirm maintenance access.
+  safety_and_privacy:
+    - Do not record calls in v1 unless explicitly reviewed.
+    - Do not collect names unless absolutely needed.
+    - Log call metadata, not sensitive conversation content.
+    - Make emergency behavior explicit and legally reviewed before enabling 911.
+
+technical_goal_states:
+  mvp_done:
+    - /kiosk route works on 6-inch screen.
+    - Keypad-only navigation works.
+    - Query returns numbered resources.
+    - 0 goes back/home.
+    - '*' repeats/help-prompts.
+    - '#' or green initiates validated call.
+    - Twilio call to allowlisted test number works.
+    - Call status is logged.
+    - Admin can disable kiosk and suspend numbers.
+    - /demo route can be shared with partners.
+  pilot_ready:
+    - Device boots directly to kiosk.
+    - Device recovers from browser crash.
+    - Device sends heartbeat.
+    - Closed-hours mode works.
+    - Rate limits work.
+    - Signage is installed.
+    - Provider allowlist reviewed.
+    - 24-hour unattended test passes.
+
+recommended_first_build_order:
+  - M0
+  - M1
+  - M2
+  - M3
+  - M8
+  - M4
+  - M5
+  - M6
+  - M7
+  - M9
+  - M10
+  - M11
+  - M12
+
+non_goals_for_v1:
+  - arbitrary outbound dialing
+  - video calls
+  - facial recognition
+  - call recording
+  - storing sensitive identity data
+  - offline full Pointer search
+  - live voice over LoRa
+  - complex touch UI
+  - full mailbox system before the basic call kiosk works
+
+acceptance_test_script_mvp: |
+  1. Open /demo on a normal laptop.
+  2. Press 1 for Shelter or type/speak "I need shelter tonight".
+  3. Confirm numbered resources appear.
+  4. Press 1 to select the first resource.
+  5. Press * and confirm the resource is repeated aloud.
+  6. Press 0 and confirm it returns to the list.
+  7. Select a test resource with allowlisted phone number.
+  8. Press # or green and confirm call confirmation screen appears.
+  9. Confirm backend refuses calls if resource is not allowlisted.
+  10. Complete one Twilio test call and confirm call log appears in admin.
+  11. Disable the kiosk from admin and confirm calls are blocked.
+  12. Re-enable kiosk and confirm normal flow works again.

@@ -1,0 +1,157 @@
+{
+  "shelter": {
+    "category": "Shelter",
+    "items": [
+      {
+        "name": "albertos Room & Board",
+        "phone": "9162147895",
+        "address": "1738 Bell Street",
+        "description": "Provides a room and board , both Kenneth smith and Ismael are current residents at his room and board"
+      },
+      {
+        "name": "First Step Communities",
+        "phone": "9168224900",
+        "address": "1400 North A Street .",
+        "description": "Men&women shelter, 40 each. Walkins only for Waitlist, Case management offered to residents. Multiple Safe Grounds throughout city"
+      },
+      {
+        "name": "North 5th VOA",
+        "phone": "9162653400",
+        "address": "700 North 5th Sacramento CA 95811",
+        "description": "Women and Men , 90 day shelter program. Referrals only MAYBE??"
+      },
+      {
+        "name": "Salvation Army",
+        "phone": "9164420331",
+        "address": "12th & North B St",
+        "description": "Shelter, 211 referral only"
+      }
+    ]
+  },
+  "food": {
+    "category": "Food",
+    "items": [
+      {
+        "name": "Loaves and Fishes",
+        "phone": "9164460874",
+        "address": "1351 North C st",
+        "description": "Dining Room600800 meals every day,Friendship park, community service, Mercy clinic, spokes & wrenches, library, mercer veterinary clinic, spiritual companions ministry"
+      },
+      {
+        "name": "SSIP South Sac Interfaith Partnership",
+        "phone": "9164285290",
+        "address": "5625 24th Street, Sacramento CA 95822",
+        "description": "Provides large donation of airline food and other snacks"
+      }
+    ]
+  },
+  "medical": {
+    "category": "Medical Clinic",
+    "items": [
+      {
+        "name": "A.O.D. Assessments Sac County",
+        "phone": "9168749754",
+        "address": "3321 Power Inn rd suite120",
+        "description": "County drug and alcohol program. Youth:916 8752050, We provide prevention and treatment services for substance alcohol and drugs use disorders. We contract with an array of communitybased service providers throughout Sacramento County. The range of services provided through these organizations includes prevention services, outpatient treatment, intensive outpatient services, medicationassisted treatment, withdrawal management detoxification, residential treatment, recovery residences, and more. Services are available for youth, young adults, perinatal/parenting women, adults, and seniors. Services will be provided to meet your cultural and language needs free of charge."
+      },
+      {
+        "name": "Alpha 1 medical",
+        "phone": "9166351111",
+        "address": "10461 Old Placerville Rd #110, Sacramento, CA 95827",
+        "description": "emergency medical services, like 911 ambulance"
+      },
+      {
+        "name": "Sacramento Urgent Care Now",
+        "phone": "9167317728",
+        "address": "1201 Alhambra Blvd #230, Sacramento, CA 95816",
+        "description": "Sacramento Urgent Care offers a faster, convenient, and economical alternative to going to an emergency room. Our expert physicians, nurse practitioners, and support staff provide quality sameday care for patients of all ages, including infants, children, and adults with nonlifethreatening illnesses and injuries. If a medical problem is lifethreatening, call 911."
+      },
+      {
+        "name": "Urgent Care Now Arden",
+        "phone": "9164809925",
+        "address": "4345 Arden Way, Sacramento CA., 95864",
+        "description": "XRays, EKG's, IV fluids, oxygen therapy, nebulizer treatments, wound care, laboratory services, medication prescriptions, work comp, occupational medicine."
+      }
+    ]
+  },
+  "mental_health": {
+    "category": "Mental Health Clinic",
+    "items": [
+      {
+        "name": "Alternative Family Services",
+        "phone": "9162545200",
+        "address": "8950 Cal Center Drive, Suite 340 Sacramento, 95826",
+        "description": "Children's General & Specialized Mental Health Services"
+      },
+      {
+        "name": "Alternative Family Services - The Gathering Place",
+        "phone": "5107462800",
+        "address": "401 Roland Way Oakland, 94621",
+        "description": "Children's & Adult General & Specialized Mental Health Services"
+      },
+      {
+        "name": "Asian Pacific Community Counseling",
+        "phone": "9163836783",
+        "address": "7273 14th Avenue, Suite 120-B Sacramento, 95820",
+        "description": "Children's & Adult General & Specialized Mental Health Services"
+      },
+      {
+        "name": "Bay Area Community Services Inc",
+        "phone": "9163797964",
+        "address": "9333 Tech Center Drive, Suite 100 Sacramento, 95826",
+        "description": "Adult General & Specialized Mental Health Services"
+      }
+    ]
+  },
+  "transport": {
+    "category": "Transport",
+    "items": [
+      {
+        "name": "Shelia",
+        "phone": "9164001750",
+        "address": null,
+        "description": "Transport service, Cash, Card. Zelle, venmo. Sweet lady knows Mike Jones"
+      }
+    ]
+  },
+  "veterans": {
+    "category": "Veterans",
+    "items": [
+      {
+        "name": "Roads Home",
+        "phone": "8332554899",
+        "address": "2701 k Street Suite 101",
+        "description": "Veterans housing services, homelessness services for veterans. Jay:"
+      }
+    ]
+  },
+  "youth": {
+    "category": "Youth",
+    "items": [
+      {
+        "name": "Capital Adoptive Families Alliance",
+        "phone": "9168343700",
+        "address": null,
+        "description": "Planned respite through events for adoptive parents or children with complex mental health"
+      },
+      {
+        "name": "LuMien Community Services",
+        "phone": "9163833083",
+        "address": null,
+        "description": "Planned respite through events for youth , adults and older adults of the Mien community"
+      },
+      {
+        "name": "Mustard seed school",
+        "phone": "9164473626",
+        "address": null,
+        "description": "Provides a Montessori stile quality education for children ages 315, Breakfast, school supplies,clothes, counseling, survival supplies, health care"
+      },
+      {
+        "name": "Sacramento Children's home",
+        "phone": "9164523981",
+        "address": "2750 Sutterville Road",
+        "description": "Foster youth tutorial, CalFURS, Education, Counseling center, Crisis Nursery, Family resource center, Residential treatment"
+      }
+    ]
+  }
+}
