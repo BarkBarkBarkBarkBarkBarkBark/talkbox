@@ -76,9 +76,9 @@ else
     echo "  ┌─ Required settings ─────────────────────────────────────────────"
 
     # OpenAI key
-    read -rp "  │  OpenAI API key (sk-...): " OPENAI_KEY
-    while [[ ! "$OPENAI_KEY" =~ ^sk- ]]; do
-        echo "  │  ↳ Must start with 'sk-'"
+    read -rp "  │  OpenAI API key: " OPENAI_KEY
+    while [ -z "$OPENAI_KEY" ]; do
+        echo "  │  ↳ Cannot be empty"
         read -rp "  │  OpenAI API key: " OPENAI_KEY
     done
 
