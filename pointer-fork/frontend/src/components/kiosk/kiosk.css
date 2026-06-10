@@ -200,31 +200,53 @@
 }
 
 /* ───── Dial tab ───── */
+/* Split landscape: controls left, keypad right */
 .kiosk-dial-layout {
-  justify-content: flex-start;
-  gap: 0;
+  flex-direction: row !important;
+  align-items: stretch;
+  gap: clamp(0.5rem, 2vw, 1rem);
+  padding: clamp(0.5rem, 1.5vh, 0.75rem) clamp(0.5rem, 2vw, 1rem);
+  overflow: hidden;
 }
 
-.kiosk-dial-header {
-  flex: 0 0 auto;
+.kiosk-dial-left {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: clamp(0.3rem, 1vh, 0.5rem);
+  justify-content: center;
+  gap: clamp(0.35rem, 1.2vh, 0.6rem);
+  min-width: 0;
+}
+
+.kiosk-dial-label {
+  font-size: clamp(0.95rem, 2.4vh, 1.2rem);
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.kiosk-dial-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
 }
 
 .kiosk-dial-hint {
-  font-size: clamp(0.8rem, 1.8vh, 0.95rem);
+  font-size: clamp(0.75rem, 1.6vh, 0.9rem);
   color: hsl(var(--muted-foreground));
   margin: 0;
-  text-align: center;
+}
+
+.kiosk-dial-delete,
+.kiosk-dial-clear {
+  width: 100%;
 }
 
 .kiosk-dial-display {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(2.5rem, 7vh, 3.5rem);
-  padding: clamp(0.3rem, 1.2vh, 0.6rem) clamp(0.75rem, 2.5vw, 1.25rem);
+  min-height: clamp(2.5rem, 8vh, 4rem);
+  padding: clamp(0.3rem, 1vh, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem);
   border: 2px solid hsl(var(--border));
   border-radius: var(--radius-lg);
   background: hsl(var(--card));
@@ -246,7 +268,6 @@
   display: flex;
   justify-content: center;
   gap: clamp(0.5rem, 2vw, 1rem);
-  margin-top: 0;
 }
 
 .kiosk-dial-btn {
@@ -276,9 +297,8 @@
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  margin-top: clamp(0.4rem, 1.2vh, 0.6rem);
   overflow: hidden;
 }
 
@@ -532,20 +552,23 @@
 .kiosk-keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: clamp(0.4rem, 1.5vw, 0.75rem);
-  width: min(22rem, 92%);
-  margin: 0 auto;
+  grid-template-rows: repeat(4, 1fr);
+  gap: clamp(0.3rem, 1vw, 0.5rem);
+  /* Fill the available height of the right column exactly */
+  height: 100%;
+  width: min(18rem, 52vw);
 }
 
 .kiosk-keypad button {
-  aspect-ratio: 1.8 / 1;
-  font-size: clamp(1.1rem, 3.2vh, 1.6rem);
+  /* No aspect-ratio — let the grid rows dictate height so all 4 rows fit */
+  font-size: clamp(1rem, 2.8vh, 1.5rem);
   font-weight: 700;
   border-radius: var(--radius-lg);
   border: 2px solid hsl(var(--border));
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
   cursor: pointer;
+  min-height: 0;
 }
 
 .kiosk-keypad button:active {

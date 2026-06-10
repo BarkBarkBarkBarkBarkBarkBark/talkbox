@@ -9,17 +9,18 @@ export default function KioskDialPad({ number, onKey, onDelete, onClear }) {
   const display = formatDialed(number);
   return (
     <div className="kiosk-content kiosk-dial-layout">
-      <div className="kiosk-dial-header">
+      {/* Left: number display + controls */}
+      <div className="kiosk-dial-left">
+        <div className="kiosk-dial-label">Dial a number</div>
         <div className="kiosk-dial-display" aria-label="Number entered">
-          {display || <span className="kiosk-dial-placeholder">Enter a number…</span>}
+          {display || <span className="kiosk-dial-placeholder">Enter…</span>}
         </div>
-        <div className="kiosk-dial-edit">
-          <button type="button" className="kiosk-dial-btn" onClick={onDelete} disabled={!number}>⌫ Delete</button>
-          <button type="button" className="kiosk-dial-btn" onClick={onClear} disabled={!number}>Clear</button>
-        </div>
-        <p className="kiosk-dial-hint">Press <strong>#</strong> to call</p>
+        <button type="button" className="kiosk-dial-btn kiosk-dial-delete" onClick={onDelete} disabled={!number}>⌫ Delete</button>
+        <button type="button" className="kiosk-dial-btn kiosk-dial-clear" onClick={onClear} disabled={!number}>Clear</button>
+        <p className="kiosk-dial-hint"><strong>#</strong> to call</p>
       </div>
-      <div className="kiosk-dial-pad">
+      {/* Right: keypad always fully visible */}
+      <div className="kiosk-dial-right">
         <SimulatedKeypad onKey={onKey} />
       </div>
     </div>
