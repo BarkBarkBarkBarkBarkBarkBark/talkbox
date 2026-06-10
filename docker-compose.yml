@@ -2,6 +2,8 @@
 # Delegates to the Pointer kiosk stack (postgres + backend + frontend).
 # Run everything from the repo root:
 #   docker compose up -d --build
+name: pointer-fork
+
 include:
   - path: pointer-fork/docker-compose.yml
     env_file: pointer-fork/.env
