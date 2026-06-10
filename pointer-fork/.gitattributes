@@ -1,0 +1,7 @@
+# Force LF line endings for files that must be executed inside Linux containers.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-entrypoint* text eol=lf
+
+# Default: auto-normalize everything else
+* text=auto

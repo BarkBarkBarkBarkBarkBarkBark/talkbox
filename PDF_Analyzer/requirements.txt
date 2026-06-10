@@ -1,4 +1,0 @@
-pdfplumber
-pdf2image
-requests 
-python-dotenv
