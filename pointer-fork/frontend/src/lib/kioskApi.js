@@ -40,6 +40,14 @@ export const kioskApi = {
       body: JSON.stringify({ phone, name }),
     }),
 
+  // Request a Twilio Voice access token for browser SDK calling.
+  // Backend validates the allowlist before issuing the token.
+  requestVoiceToken: ({ phone, name }) =>
+    request("/api/kiosk/call/token", {
+      method: "POST",
+      body: JSON.stringify({ phone, name }),
+    }),
+
   // Fire-and-forget telemetry. Never blocks or throws into the UI.
   logEvent: (event) => {
     try {

@@ -1,6 +1,4 @@
-// Call confirmation + active-call screens. Real outbound calling is gated by the
-// backend (Twilio Voice + allowlist, milestone M6); until then the call is
-// clearly labeled as simulated so the demo never dials a real number.
+// Call confirmation + active-call screens.
 export function KioskCallConfirm({ item, onKey }) {
   return (
     <div className="kiosk-content">
@@ -8,6 +6,9 @@ export function KioskCallConfirm({ item, onKey }) {
         <h1 className="kiosk-title">Call this resource?</h1>
         <p className="kiosk-subtitle">{item?.name}</p>
         {item?.phone_display ? <p className="kiosk-phone">{item.phone_display}</p> : null}
+        <p className="kiosk-subtitle" style={{ fontSize: "clamp(0.8rem,1.8vh,0.95rem)", opacity: 0.7 }}>
+          This is a live call — please speak clearly into the microphone.
+        </p>
         <div className="kiosk-actions">
           <button type="button" className="kiosk-action back" onClick={() => onKey?.("0")}>
             <span className="k">0</span> Cancel
@@ -21,31 +22,35 @@ export function KioskCallConfirm({ item, onKey }) {
   );
 }
 
+const STATUS_LABEL = {
+  connecting:    "Connecting…",
+  ringing:       "Ringing…",
+  "in-progress": "Call connected",
+  connected:     "Call connected",
+  ended:         "Call ended",
+  failed:        "Call not placed",
+};
+
 export function KioskCallActive({ item, status, simulated, reason, onKey }) {
-  const label =
-    status === "connecting"
-      ? "Connecting…"
-      : status === "connected"
-        ? "Call placed"
-        : status === "failed"
-          ? "Call not placed"
-          : "Call";
+  const label = STATUS_LABEL[status] || "Calling…";
+  const isLive = !simulated && (status === "in-progress" || status === "connected");
+  const isPulsing = status === "connecting" || status === "ringing";
+
   return (
     <div className="kiosk-content">
       <div className="kiosk-center">
         {simulated ? <span className="kiosk-badge demo">Simulated call</span> : null}
-        <h1 className={`kiosk-title ${status === "connecting" ? "kiosk-pulse" : ""}`}>{label}</h1>
+        {isLive ? <span className="kiosk-badge" style={{background:"hsl(var(--success))",color:"hsl(var(--success-foreground))"}}>● Live call</span> : null}
+        <h1 className={`kiosk-title ${isPulsing ? "kiosk-pulse" : ""}`}>{label}</h1>
         <p className="kiosk-subtitle">{item?.name}</p>
         {item?.phone_display ? <p className="kiosk-phone">{item.phone_display}</p> : null}
         {status === "failed" && reason ? <p className="kiosk-subtitle">{reason}</p> : null}
         {simulated ? (
-          <p className="kiosk-subtitle">
-            This is a demonstration. No real call is placed.
-          </p>
+          <p className="kiosk-subtitle">This is a demonstration. No real call is placed.</p>
         ) : null}
         <div className="kiosk-actions">
           <button type="button" className="kiosk-action back" onClick={() => onKey?.("0")}>
-            <span className="k">0</span> Hang up
+            <span className="k">0</span> {isLive ? "Hang up" : "Go back"}
           </button>
         </div>
       </div>

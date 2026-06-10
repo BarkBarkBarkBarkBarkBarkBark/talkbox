@@ -1,16 +1,17 @@
 """Kiosk-facing HTTP routes (keypad-first 6-inch UX).
 
 All routes are additive and live under ``/api/kiosk``. They never touch the
-existing ``/api/query`` or SMS behavior. Calling is intentionally NOT exposed
-here yet — Twilio Voice + an allowlist land in a later milestone (M6), so the
-kiosk cannot dial anything from these endpoints.
+existing ``/api/query`` or SMS behavior.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
+import time
+import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
 from src.application.services.kiosk_call_service import KioskCallService
@@ -23,8 +24,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 
+_voice_service = TwilioVoiceService()
 kiosk_query_service = KioskQueryService(query_handler)
-kiosk_call_service = KioskCallService(TwilioVoiceService())
+kiosk_call_service = KioskCallService(_voice_service)
+
+# ─── Pending browser-SDK calls ───────────────────────────────────────────────
+# Maps identity (UUID str) → {"to": e164, "expires": epoch_float}
+# Cleaned up by a background thread every 2 minutes.
+_pending_calls: dict[str, dict] = {}
+_pending_lock = threading.Lock()
+_PENDING_TTL = 90  # seconds
+
+
+def _prune_pending() -> None:
+    now = time.time()
+    with _pending_lock:
+        expired = [k for k, v in _pending_calls.items() if v["expires"] < now]
+        for k in expired:
+            del _pending_calls[k]
+
+
+def _schedule_prune() -> None:
+    threading.Timer(120, lambda: (_prune_pending(), _schedule_prune())).start()
+
+
+_schedule_prune()
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -85,6 +109,17 @@ class KioskCallResponse(BaseModel):
     reason: str | None = None
 
 
+class KioskVoiceTokenRequest(BaseModel):
+    phone: str = Field(..., min_length=3, description="Number to call (must be allowlisted)")
+    name: str | None = None
+
+
+class KioskVoiceTokenResponse(BaseModel):
+    token: str
+    identity: str
+    agency: str
+
+
 # Home menu — 1-9 number keys map to a quick category query or action.
 _HOME_MENU: list[dict] = [
     {"key": 1, "action": "QUICK_QUERY", "label": "Shelter", "query": "I need shelter tonight"},
@@ -131,6 +166,92 @@ def kiosk_call_start(payload: KioskCallRequest) -> KioskCallResponse:
     logger.info("kiosk call request: phone=%r name=%r", payload.phone, payload.name)
     result = kiosk_call_service.start_call(payload.phone)
     return KioskCallResponse(**result)
+
+
+# ─── Browser Voice SDK endpoints ──────────────────────────────────────────────
+
+@router.post("/call/token", response_model=KioskVoiceTokenResponse)
+def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse:
+    """Validate allowlist and issue a Twilio Voice access token for the browser SDK.
+
+    The browser uses this token to initialise Device and connect() to Twilio.
+    Twilio will then POST to /api/kiosk/call/twiml to get dial instructions.
+    """
+    from fastapi import HTTPException
+    from src.application.services.kiosk_call_service import normalize_digits, to_e164
+
+    if not _voice_service.browser_calling_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Browser calling not configured. Set TWILIO_TWIML_APP_SID and TWILIO_PUBLIC_URL.",
+        )
+
+    phone_raw = payload.phone.strip()
+    digits = normalize_digits(phone_raw)
+    # Prefer E.164 pass-through for international numbers already starting with '+'
+    if phone_raw.startswith("+"):
+        e164 = f"+{digits}"
+    else:
+        e164 = to_e164(digits)
+
+    if not e164:
+        raise HTTPException(status_code=400, detail="Invalid phone number.")
+
+    agency = kiosk_call_service.find_allowlisted_agency(digits)
+    if agency is None:
+        raise HTTPException(status_code=403, detail="Number not on approved call list.")
+
+    identity = str(uuid.uuid4())
+    with _pending_lock:
+        _pending_calls[identity] = {
+            "to": e164,
+            "agency": agency,
+            "expires": time.time() + _PENDING_TTL,
+        }
+
+    token = _voice_service.generate_access_token(identity=identity)
+    logger.info("voice token issued: identity=%s agency=%s to=%s", identity, agency, e164)
+    return KioskVoiceTokenResponse(token=token, identity=identity, agency=agency)
+
+
+@router.post("/call/twiml")
+async def kiosk_call_twiml(request: Request) -> Response:
+    """Twilio webhook — return TwiML <Dial> for a validated pending call.
+
+    Twilio POSTs here after the browser Device.connect() call is accepted.
+    The SDK sends the identity as the 'From' field prefixed with 'client:'.
+    """
+    from twilio.twiml.voice_response import VoiceResponse
+
+    form = await request.form()
+    from_raw = str(form.get("From", "") or request.query_params.get("identity", ""))
+    identity_key = from_raw.replace("client:", "").strip()
+
+    with _pending_lock:
+        pending = _pending_calls.get(identity_key)
+
+    if not pending or pending["expires"] < time.time():
+        logger.warning("twiml webhook: unknown/expired identity=%r", identity_key)
+        vr = VoiceResponse()
+        vr.say("This call could not be connected.")
+        return Response(content=str(vr), media_type="application/xml")
+
+    to_number = pending["to"]
+    logger.info("twiml webhook: connecting identity=%s to=%s", identity_key, to_number)
+    twiml = _voice_service.build_dial_twiml(to_number)
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/call/status")
+async def kiosk_call_status(request: Request) -> dict:
+    """Twilio call lifecycle callback (ringing, in-progress, completed, failed)."""
+    form = await request.form()
+    sid = form.get("CallSid", "")
+    status = form.get("CallStatus", "")
+    to = form.get("To", "")
+    duration = form.get("CallDuration", "")
+    logger.info("twilio status callback: sid=%s status=%s to=%s duration=%ss", sid, status, to, duration)
+    return {"received": True}
 
 
 @router.post("/events", status_code=202)

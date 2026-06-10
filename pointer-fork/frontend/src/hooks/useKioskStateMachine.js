@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { kioskApi } from "../lib/kioskApi.js";
 import { cancelSpeech, speak } from "../lib/tts.js";
+import { useKioskVoiceCall } from "./useKioskVoiceCall.js";
 
 // Deterministic kiosk navigation driven entirely by the 12-key vocabulary
 // ("1".."9", "0", "*", "#"). The same machine backs the physical ATM keypad,
@@ -169,6 +170,27 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
   const idleTimer = useRef(null);
   const callTimer = useRef(null);
 
+  // ─── Voice SDK hook (real two-way calls) ─────────────────────────────
+  const voiceCall = useKioskVoiceCall({
+    onStatus: useCallback((sdkStatus, reason) => {
+      // Map SDK status vocabulary → state machine CALL_STATUS dispatch
+      const map = {
+        requesting:   { status: "connecting", simulated: false },
+        connecting:   { status: "connecting", simulated: false },
+        ringing:      { status: "connecting", simulated: false },
+        "in-progress": { status: "connected",  simulated: false },
+        ended:        null,  // handled by hangUp path
+        failed:       { status: "failed",    simulated: false, reason },
+      };
+      const mapped = map[sdkStatus];
+      if (mapped) {
+        dispatch({ type: "CALL_STATUS", ...mapped });
+      } else if (sdkStatus === "ended") {
+        dispatch({ type: "BACK_TO_RESULTS" });
+      }
+    }, []),
+  });
+
   // ─── Config ──────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
@@ -317,33 +339,9 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         return;
       }
 
-      // Real call: the backend validates the number against the agencies
-      // database (allowlist) and only then dials through Twilio Voice.
-      kioskApi
-        .startCall({ phone: target.phone, name: target.name })
-        .then((res) => {
-          if (res.status === "initiated") {
-            dispatch({ type: "CALL_STATUS", status: "connected", simulated: false });
-          } else if (res.status === "simulated") {
-            dispatch({ type: "CALL_STATUS", status: "connected", simulated: true });
-          } else {
-            const reason =
-              res.reason === "not_allowlisted"
-                ? "This number is not on the approved call list."
-                : "The call could not be placed.";
-            dispatch({ type: "CALL_STATUS", status: "failed", simulated: false, reason });
-            announce(`${reason} Press zero to go back.`);
-          }
-        })
-        .catch(() => {
-          dispatch({
-            type: "CALL_STATUS",
-            status: "failed",
-            simulated: false,
-            reason: "The call could not be placed.",
-          });
-          announce("The call could not be placed. Press zero to go back.");
-        });
+      // Real two-way call via Twilio Voice Browser SDK.
+      // The hook handles token fetch, Device init, and status callbacks.
+      voiceCall.startCall(target.phone, target.name);
     },
     [announce, fakeCall],
   );
@@ -351,9 +349,10 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
   const hangUp = useCallback(() => {
     if (callTimer.current) clearTimeout(callTimer.current);
     cancelSpeech();
+    voiceCall.hangUp();
     kioskApi.logEvent({ event_type: "call_end" });
     dispatch({ type: "BACK_TO_RESULTS" });
-  }, []);
+  }, [voiceCall]);
 
   const reset = useCallback(() => {
     cancelSpeech();

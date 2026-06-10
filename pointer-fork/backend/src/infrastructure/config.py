@@ -38,8 +38,11 @@ class Settings(BaseSettings):
     # ─── Twilio (SMS webhook) ─────────────────────────────────────────
     twilio_account_sid: str = Field(default="", alias="TWILIO_ACCOUNT_SID")
     twilio_auth_token: str = Field(default="", alias="TWILIO_AUTH_TOKEN")
-    twilio_phone_number: str = Field(default="", alias="TWILIO_PHONE_NUMBER")
-
+    twilio_phone_number: str = Field(default="", alias="TWILIO_PHONE_NUMBER")    # TwiML App SID (AP...) — required for browser Voice SDK calling.
+    twilio_twiml_app_sid: str = Field(default="", alias="TWILIO_TWIML_APP_SID")
+    # Publicly reachable base URL of this backend (e.g. https://xxx.ngrok.io).
+    # Twilio calls /api/kiosk/call/twiml on this URL to get dial instructions.
+    twilio_public_url: str = Field(default="", alias="TWILIO_PUBLIC_URL")
     # ─── HTTP / CORS ──────────────────────────────────────────────────
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
