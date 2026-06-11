@@ -493,13 +493,15 @@
 }
 
 .kiosk-action.back {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--card-foreground));
+}
+
+.kiosk-action.hangup {
   background: hsl(var(--destructive));
   border-color: hsl(var(--destructive));
   color: hsl(var(--destructive-foreground));
-}
-
-.kiosk-action.back .k {
-  background: hsl(var(--destructive-foreground) / 0.2);
 }
 
 /* Tray that holds the simulated keypad in demo mode. */
