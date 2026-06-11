@@ -221,7 +221,7 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
 def _twilio_signature_valid(request: Request, form: dict) -> bool:
     """Verify X-Twilio-Signature so only Twilio can fetch dial instructions.
 
-    The signed URL is the public (ngrok) URL Twilio actually called, not the
+    The signed URL is the public URL Twilio actually called, not the
     local URL uvicorn sees — reconstruct it from TWILIO_PUBLIC_URL.
     """
     from twilio.request_validator import RequestValidator
@@ -229,7 +229,11 @@ def _twilio_signature_valid(request: Request, form: dict) -> bool:
     if not settings.twilio_auth_token or not settings.twilio_public_url:
         return True  # not configured for public webhooks (local dev)
 
-    url = settings.twilio_public_url.rstrip("/") + "/api/kiosk/call/twiml"
+    public_url = settings.twilio_public_url.rstrip("/")
+    if public_url.endswith("/api/kiosk/call/twiml"):
+        url = public_url
+    else:
+        url = public_url + "/api/kiosk/call/twiml"
     signature = request.headers.get("X-Twilio-Signature", "")
     return RequestValidator(settings.twilio_auth_token).validate(url, form, signature)
 

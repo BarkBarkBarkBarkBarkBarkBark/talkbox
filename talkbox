@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # talkbox — one command to rule the kiosk.
 #
-#   talkbox update    pull from git, rebuild + relaunch, refresh ngrok,
-#                     publish webhook to Twilio, health-check. The works.
-#   talkbox ngrok     refresh the ngrok tunnel + publish to Twilio only
-#                     (--new forces a brand-new tunnel/URL)
-#   talkbox status    containers, health, ngrok URL, Twilio voice URL
+#   talkbox update       pull from git, rebuild + relaunch, publish Twilio
+#                        webhook, health-check. The works.
+#   talkbox twilio-sync  publish webhook to Twilio only, then sync backend
+#                        container env if needed.
+#   talkbox status       containers, health, public URL, Twilio voice URL
 #   talkbox restart   restart the docker stack (no rebuild)
 #   talkbox logs      tail backend logs (or: talkbox logs <service>)
 #
@@ -20,8 +20,6 @@ ENV_FILE="$REPO_DIR/app/.env"
 BACKEND_PORT="${BACKEND_PORT:-8085}"
 FRONTEND_PORT="${FRONTEND_PORT:-8084}"
 TWIML_ROUTE="/api/kiosk/call/twiml"
-NGROK_API="http://localhost:4040/api/tunnels"
-LOG_FILE="/tmp/talkbox-update.log"
 
 # ── Pretty output ─────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -54,75 +52,41 @@ require_env() {
     TWILIO_ACCOUNT_SID="$(env_val TWILIO_ACCOUNT_SID)"
     TWILIO_AUTH_TOKEN="$(env_val TWILIO_AUTH_TOKEN)"
     TWIML_APP_SID="$(env_val TWILIO_TWIML_APP_SID)"
+    RAW_PUBLIC_URL="$(env_val TWILIO_PUBLIC_URL)"
     [ -n "$TWILIO_ACCOUNT_SID" ] && [ -n "$TWILIO_AUTH_TOKEN" ] || fail "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN not set in .env"
     [ -n "$TWIML_APP_SID" ] || fail "TWILIO_TWIML_APP_SID not set in .env"
+    [ -n "$RAW_PUBLIC_URL" ] || fail "TWILIO_PUBLIC_URL not set in .env"
+
+    PUBLIC_BASE_URL="$(normalize_public_base_url "$RAW_PUBLIC_URL")"
+    [ -n "$PUBLIC_BASE_URL" ] || fail "TWILIO_PUBLIC_URL is invalid: $RAW_PUBLIC_URL"
+    WEBHOOK_URL="${PUBLIC_BASE_URL}${TWIML_ROUTE}"
 }
 
-current_ngrok_url() {
-    curl -s --max-time 3 "$NGROK_API" 2>/dev/null \
-        | python3 -c "import sys,json
-try:
-    for t in json.load(sys.stdin).get('tunnels', []):
-        if t.get('public_url','').startswith('https'):
-            print(t['public_url']); break
-except Exception:
-    pass" 2>/dev/null || true
-}
+normalize_public_base_url() {
+    local input="$1"
+    local base="$input"
 
-ensure_ngrok() {
-    # $1 = "force" to kill any existing tunnel and mint a new URL
-    local force="${1:-}"
-    NGROK_URL="$(current_ngrok_url)"
-
-    if [ -n "$NGROK_URL" ] && [ "$force" != "force" ]; then
-        ok "Reusing live ngrok tunnel: ${BOLD}$NGROK_URL${NC}"
-        return
+    # Accept either the base URL or a full webhook URL and normalize to base.
+    if [[ "$base" == *"$TWIML_ROUTE" ]]; then
+        base="${base%"$TWIML_ROUTE"}"
     fi
-
-    if [ -n "$NGROK_URL" ]; then
-        note "Killing existing tunnel (forcing a new URL)..."
-    fi
-    pkill -f "ngrok http" 2>/dev/null || true
-    sleep 1
-
-    note "Starting ngrok on port $BACKEND_PORT..."
-    nohup ngrok http "$BACKEND_PORT" >> "$LOG_FILE" 2>&1 &
-    disown
-
-    NGROK_URL=""
-    for i in $(seq 1 15); do
-        sleep 2
-        NGROK_URL="$(current_ngrok_url)"
-        [ -n "$NGROK_URL" ] && break
-        note "waiting for ngrok... ($i/15)"
-    done
-    [ -n "$NGROK_URL" ] || fail "ngrok did not come up — check $LOG_FILE"
-    ok "ngrok tunnel up: ${BOLD}$NGROK_URL${NC}"
+    base="${base%/}"
+    printf '%s' "$base"
 }
 
 publish_to_twilio() {
-    local webhook="${NGROK_URL}${TWIML_ROUTE}"
     note "Publishing voice webhook to Twilio TwiML App ${TWIML_APP_SID:0:10}…"
     local status
     status=$(curl -s -o /tmp/talkbox-twilio.json -w "%{http_code}" \
         -X POST "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Applications/${TWIML_APP_SID}.json" \
         -u "${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}" \
-        --data-urlencode "VoiceUrl=${webhook}" \
+        --data-urlencode "VoiceUrl=${WEBHOOK_URL}" \
         --data-urlencode "VoiceMethod=POST")
     if [ "$status" != "200" ]; then
         cat /tmp/talkbox-twilio.json >&2
         fail "Twilio API returned HTTP $status"
     fi
-    ok "Twilio VoiceUrl → ${BOLD}$webhook${NC}"
-}
-
-write_public_url() {
-    if grep -q '^TWILIO_PUBLIC_URL=' "$ENV_FILE"; then
-        sed -i "s|^TWILIO_PUBLIC_URL=.*|TWILIO_PUBLIC_URL=$NGROK_URL|" "$ENV_FILE"
-    else
-        echo "TWILIO_PUBLIC_URL=$NGROK_URL" >> "$ENV_FILE"
-    fi
-    ok ".env updated: TWILIO_PUBLIC_URL=$NGROK_URL"
+    ok "Twilio VoiceUrl → ${BOLD}${WEBHOOK_URL}${NC}"
 }
 
 wait_for_health() {
@@ -139,7 +103,7 @@ wait_for_health() {
 
 summary_box() {
     # NB: docker-compose binds 127.0.0.1 only — the kiosk is reachable on this
-    # machine (and through ngrok), not on the LAN, unless compose is edited.
+    # machine, not on the LAN, unless compose is edited.
     local enabled; enabled=$(curl -s --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/kiosk/config" 2>/dev/null \
         | python3 -c "import sys,json; print('yes' if json.load(sys.stdin).get('calling_enabled') else 'NO')" 2>/dev/null || echo "?")
     echo ""
@@ -148,8 +112,8 @@ summary_box() {
     echo -e "${GREEN}${BOLD}  ╠═══════════════════════════════════════════════════════════╣${NC}"
     printf "  ${GREEN}║${NC}  Kiosk     ${BOLD}%-46s${NC} ${GREEN}║${NC}\n" "http://localhost:${FRONTEND_PORT}/kiosk"
     printf "  ${GREEN}║${NC}  Demo      %-46s ${GREEN}║${NC}\n" "http://localhost:${FRONTEND_PORT}/demo"
-    printf "  ${GREEN}║${NC}  Tunnel    %-46s ${GREEN}║${NC}\n" "${NGROK_URL:-"(not running)"}"
-    printf "  ${GREEN}║${NC}  Webhook   %-46s ${GREEN}║${NC}\n" "…${TWIML_ROUTE}"
+    printf "  ${GREEN}║${NC}  Public    %-46s ${GREEN}║${NC}\n" "${PUBLIC_BASE_URL}"
+    printf "  ${GREEN}║${NC}  Webhook   %-46s ${GREEN}║${NC}\n" "${WEBHOOK_URL}"
     printf "  ${GREEN}║${NC}  Calling   %-46s ${GREEN}║${NC}\n" "enabled: ${enabled}"
     echo -e "${GREEN}${BOLD}  ╚═══════════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -157,7 +121,7 @@ summary_box() {
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 cmd_update() {
-    STEP_TOTAL=5
+    STEP_TOTAL=4
     banner
     cd "$REPO_DIR"
     require_env
@@ -177,12 +141,8 @@ cmd_update() {
         git log --oneline "$before..$after" | head -5 | sed 's/^/    /'
     fi
 
-    step "Refreshing ngrok tunnel"
-    ensure_ngrok
-
     step "Publishing webhook to Twilio"
     publish_to_twilio
-    write_public_url
 
     step "Rebuilding and relaunching containers"
     docker compose up -d --build 2>&1 | grep -E 'Built|Started|Healthy|Error' | sed 's/^ */  /' || true
@@ -190,30 +150,36 @@ cmd_update() {
 
     step "Health check"
     wait_for_health
+
+    # Reload Chromium so it picks up the new JS bundle (browser caches the old
+    # one and never fetches the new index.html unless explicitly refreshed).
+    if pgrep -x chromium-browser >/dev/null 2>&1 || pgrep -x chromium >/dev/null 2>&1; then
+        note "Reloading Chromium kiosk browser..."
+        DISPLAY=:0 xdotool key ctrl+F5 2>/dev/null \
+            || DISPLAY=:0 xdotool key F5 2>/dev/null \
+            || true
+        ok "Browser refresh sent"
+    fi
+
     summary_box
 }
 
-cmd_ngrok() {
-    STEP_TOTAL=3
+cmd_twilio_sync() {
+    STEP_TOTAL=2
     cd "$REPO_DIR"
     require_env
-    local force=""
-    [ "${1:-}" = "--new" ] && force="force"
-
-    step "Refreshing ngrok tunnel"
-    ensure_ngrok "$force"
 
     step "Publishing webhook to Twilio"
     publish_to_twilio
-    write_public_url
 
     step "Syncing backend"
     # Compare against the *container's* env — that's what signature validation
     # actually uses. (.env alone can be right while the container is stale.)
     local container_url
     container_url="$(docker exec talkbox-backend printenv TWILIO_PUBLIC_URL 2>/dev/null || true)"
-    if [ "$container_url" = "$NGROK_URL" ]; then
-        ok "Backend already has $NGROK_URL — no restart needed"
+    container_url="$(normalize_public_base_url "$container_url")"
+    if [ "$container_url" = "$PUBLIC_BASE_URL" ]; then
+        ok "Backend already has $PUBLIC_BASE_URL — no restart needed"
     else
         note "Backend env stale ('$container_url') — recreating (restart won't reload .env)..."
         docker compose up -d --force-recreate talkbox-backend >/dev/null 2>&1
@@ -229,37 +195,34 @@ twilio_voice_url() {
 }
 
 cmd_watchdog() {
-    # Periodic self-heal: verify tunnel ↔ .env ↔ backend container ↔ Twilio
-    # are all in sync; if anything drifted, run the full ngrok repair path.
+    # Periodic self-heal: verify .env ↔ backend container ↔ Twilio are in sync.
     cd "$REPO_DIR"
     require_env
 
-    local live env_url container_url voice_url drift=""
-    live="$(current_ngrok_url)"
-    env_url="$(env_val TWILIO_PUBLIC_URL)"
+    local env_url container_url voice_url drift=""
+    env_url="$(normalize_public_base_url "$(env_val TWILIO_PUBLIC_URL)")"
     container_url="$(docker exec talkbox-backend printenv TWILIO_PUBLIC_URL 2>/dev/null || true)"
+    container_url="$(normalize_public_base_url "$container_url")"
 
-    if [ -z "$live" ]; then
-        drift="ngrok tunnel down"
-    elif [ "$env_url" != "$live" ]; then
+    if [ "$env_url" != "$PUBLIC_BASE_URL" ]; then
         drift=".env has '$env_url'"
-    elif [ "$container_url" != "$live" ]; then
+    elif [ "$container_url" != "$PUBLIC_BASE_URL" ]; then
         drift="backend container has '$container_url'"
     else
         voice_url="$(twilio_voice_url)"
         # Empty = Twilio API unreachable (offline?) — don't thrash, check next run.
-        if [ -n "$voice_url" ] && [ "$voice_url" != "${live}${TWIML_ROUTE}" ]; then
+        if [ -n "$voice_url" ] && [ "$voice_url" != "${WEBHOOK_URL}" ]; then
             drift="Twilio VoiceUrl is '$voice_url'"
         fi
     fi
 
     if [ -z "$drift" ]; then
-        ok "watchdog: in sync ($live)"
+        ok "watchdog: in sync (${WEBHOOK_URL})"
         return 0
     fi
 
     warn "watchdog: $drift — repairing..."
-    cmd_ngrok
+    cmd_twilio_sync
 }
 
 cmd_status() {
@@ -275,25 +238,21 @@ cmd_status() {
         warn "backend unreachable on :${BACKEND_PORT}"
     fi
     echo ""
-    echo -e "${BOLD}Tunnel + Twilio${NC}"
-    NGROK_URL="$(current_ngrok_url)"
-    if [ -n "$NGROK_URL" ]; then
-        ok "ngrok: $NGROK_URL"
-    else
-        warn "ngrok: not running (run: talkbox ngrok)"
-    fi
+    echo -e "${BOLD}Public URL + Twilio${NC}"
     if [ -f "$ENV_FILE" ]; then
         require_env
         local voice_url
         voice_url=$(curl -s -u "${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}" \
             "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Applications/${TWIML_APP_SID}.json" 2>/dev/null \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('voice_url',''))" 2>/dev/null || true)
+        ok "TWILIO_PUBLIC_URL (base): $PUBLIC_BASE_URL"
+        note "Expected Twilio VoiceUrl: $WEBHOOK_URL"
         if [ -n "$voice_url" ]; then
-            if [ -n "$NGROK_URL" ] && [[ "$voice_url" == "$NGROK_URL"* ]]; then
-                ok "Twilio VoiceUrl matches tunnel: $voice_url"
+            if [ "$voice_url" = "$WEBHOOK_URL" ]; then
+                ok "Twilio VoiceUrl matches expected webhook: $voice_url"
             else
                 warn "Twilio VoiceUrl: ${voice_url:-"(unset)"}"
-                [ -n "$NGROK_URL" ] && warn "→ out of sync with tunnel — run: talkbox ngrok"
+                warn "→ out of sync — run: talkbox twilio-sync"
             fi
         fi
         note "TWILIO_PUBLIC_URL in .env: $(env_val TWILIO_PUBLIC_URL)"
@@ -306,7 +265,7 @@ cmd_restart() {
     echo -e "${BOLD}Restarting stack...${NC}"
     docker compose restart
     wait_for_health
-    NGROK_URL="$(current_ngrok_url)"
+    require_env
     summary_box
 }
 
@@ -387,10 +346,10 @@ cmd_install() {
 
 usage() {
     banner
-    echo -e "  ${BOLD}talkbox update${NC}    git pull → rebuild → relaunch → ngrok → Twilio → health"
-    echo -e "  ${BOLD}talkbox ngrok${NC}     refresh tunnel + publish to Twilio  (--new = new URL)"
-    echo -e "  ${BOLD}talkbox status${NC}    containers, health, tunnel, Twilio sync"
-    echo -e "  ${BOLD}talkbox watchdog${NC}  check tunnel/.env/backend/Twilio sync, repair if drifted"
+    echo -e "  ${BOLD}talkbox update${NC}       git pull → rebuild → relaunch → Twilio → health"
+    echo -e "  ${BOLD}talkbox twilio-sync${NC}  publish webhook to Twilio and sync backend"
+    echo -e "  ${BOLD}talkbox status${NC}       containers, health, public URL, Twilio sync"
+    echo -e "  ${BOLD}talkbox watchdog${NC}     check .env/backend/Twilio sync, repair if drifted"
     echo -e "  ${BOLD}talkbox restart${NC}   restart containers (no rebuild)"
     echo -e "  ${BOLD}talkbox refresh${NC}   reload the on-screen kiosk browser (no reboot)"
     echo -e "  ${BOLD}talkbox logs${NC}      tail backend logs  (talkbox logs talkbox-frontend)"
@@ -400,7 +359,7 @@ usage() {
 
 case "${1:-}" in
     update)  cmd_update ;;
-    ngrok)   shift; cmd_ngrok "$@" ;;
+    twilio-sync) shift; cmd_twilio_sync "$@" ;;
     status)  cmd_status ;;
     watchdog) cmd_watchdog ;;
     restart) cmd_restart ;;

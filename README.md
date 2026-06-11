@@ -30,14 +30,14 @@ dialing `2-1-1` on the kiosk routes to `+1 (916) 498-1000`
 
 | Path | What it is |
 | --- | --- |
-| [`talkbox`](talkbox) | The CLI. `talkbox update` = git pull → rebuild → relaunch → ngrok → Twilio publish → health check. |
+| [`talkbox`](talkbox) | The CLI. `talkbox update` = git pull → rebuild → relaunch → Twilio publish → health check. |
 | [`app/`](app/) | The app: FastAPI backend, React kiosk frontend, nginx, pgvector Postgres, Docker Compose. |
 | [`app/backend/`](app/backend/) | Python 3.13 / FastAPI / SQLAlchemy / LangChain. Seeds the agency DB + embeddings on first boot. |
 | [`app/frontend/`](app/frontend/) | React 19 + Vite + Tailwind. Routes: `/kiosk` (real calls), `/demo` (simulated), `/` (desktop chat). |
 | [`Datasets/`](Datasets/) | Reference datasets and data-source documentation. |
 | [`install.sh`](install.sh) | One-shot Pi installer (Docker, repo, `.env`, build, health). |
 | [`kiosk-setup.sh`](kiosk-setup.sh) | Turns the Pi into a fullscreen Chromium kiosk on boot. |
-| [`ngrok-update.sh`](ngrok-update.sh) | Thin systemd wrapper around `talkbox ngrok` (re-syncs the tunnel at boot). |
+| [`twilio-sync.sh`](twilio-sync.sh) | Thin systemd wrapper around `talkbox twilio-sync` (re-syncs webhook config at boot). |
 | [`agent-context.yaml`](agent-context.yaml), [`kiosk-roadmap.yaml`](kiosk-roadmap.yaml) | Machine-readable project context and roadmap for AI agents (historical, pre-rename). |
 
 ## Agent crib sheet (key files)
@@ -61,7 +61,7 @@ flowchart LR
   Button["Kiosk: green Call button"] --> Token["POST /api/kiosk/call/token (allowlist check, JWT)"]
   Token --> Connect["Browser: Twilio Device.connect"]
   Connect --> Twilio[Twilio Cloud]
-  Twilio -->|"via ngrok tunnel"| Webhook["POST /api/kiosk/call/twiml"]
+  Twilio -->|"via public HTTPS webhook"| Webhook["POST /api/kiosk/call/twiml"]
   Webhook --> DialOut["TwiML Dial to agency / 211"]
   Connect -. "keypad → DTMF during call" .-> Twilio
 ```
@@ -79,16 +79,15 @@ home). **During a live call every keypad key is sent as a DTMF tone** (so
 ```bash
 ./talkbox install   # once — puts `talkbox` on your PATH
 
-talkbox update      # git pull → rebuild → relaunch → ngrok → publish webhook to Twilio → health
-talkbox ngrok       # refresh tunnel + publish to Twilio only (--new forces a new URL)
-talkbox status      # containers, health, tunnel, Twilio sync check
+talkbox update      # git pull → rebuild → relaunch → publish webhook to Twilio → health
+talkbox twilio-sync # publish webhook to Twilio + sync backend env
+talkbox status      # containers, health, public URL, Twilio sync check
 talkbox restart     # restart containers without rebuilding
 talkbox logs        # tail backend logs
 ```
 
-`update` reuses a live ngrok tunnel when one exists; otherwise it starts one,
-pushes the fresh URL to the Twilio TwiML App via the REST API, rewrites
-`TWILIO_PUBLIC_URL` in `.env`, and relaunches the stack.
+`update` publishes `TWILIO_PUBLIC_URL + /api/kiosk/call/twiml` to the Twilio
+TwiML App via the REST API and relaunches the stack.
 
 ## Quick start (Docker)
 
@@ -132,8 +131,9 @@ curl -s -X POST 127.0.0.1:8085/api/kiosk/call/token \
 
 Real two-way calls run through the Twilio Voice **browser SDK**: the kiosk
 fetches a short-lived access token, `Device.connect()` opens the call, and
-Twilio fetches dial instructions from `/api/kiosk/call/twiml` through the
-ngrok tunnel. The backend refuses any number that is not:
+Twilio fetches dial instructions from `/api/kiosk/call/twiml` through your
+public HTTPS URL (for example Tailscale Funnel). The backend refuses any
+number that is not:
 
 1. in the seeded `agencies` table (matched on last 10 digits),
 2. a built-in 211 help-line number, or
@@ -144,8 +144,8 @@ ngrok tunnel. The backend refuses any number that is not:
 nginx ships `Permissions-Policy: microphone=(self)` for this.
 
 One-time Twilio setup: create a TwiML App (Console → Voice → TwiML Apps),
-put its SID in `TWILIO_TWIML_APP_SID` — `talkbox update` keeps its Voice URL
-pointed at the current tunnel automatically.
+put its SID in `TWILIO_TWIML_APP_SID`, and set `TWILIO_PUBLIC_URL` in `.env`
+to your stable public host URL.
 
 ## Deploying to a Raspberry Pi
 
@@ -154,7 +154,7 @@ Pi 4/5, 64-bit Raspberry Pi OS, 4 GB+ RAM. Build on the Pi itself (arm64):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BarkBarkBarkBarkBarkBarkBark/talkbox/main/install.sh | bash
 bash ~/talkbox/kiosk-setup.sh       # fullscreen Chromium kiosk on boot
-# systemd service for boot-time tunnel sync: see header of ngrok-update.sh
+# systemd service for boot-time Twilio sync: see header of twilio-sync.sh
 ```
 
 Ports bind to loopback by default. To expose the kiosk on your LAN, change
@@ -175,18 +175,16 @@ npm install && npm run dev    # Vite proxies /api to 127.0.0.1:8085
 
 ## Known sharp edges
 
-- **ngrok free tier**: the URL changes whenever the tunnel restarts. If the
-  tunnel dies, Twilio's webhook goes stale and calls fail with "could not be
-  connected" — `talkbox status` detects the drift, `talkbox ngrok` fixes it.
-  A reserved ngrok domain (or Cloudflare tunnel) would eliminate this class
-  of failure entirely.
+- **Public URL drift**: if `TWILIO_PUBLIC_URL` in `.env`, the backend container,
+  and Twilio VoiceUrl do not match, webhooks can fail. `talkbox status` detects
+  drift and `talkbox twilio-sync` repairs it.
 - **Pending calls are in-process memory** (`_pending_calls` in
   `kiosk_routes.py`): a backend restart between token issue and Twilio's
   webhook drops the call, and multiple uvicorn workers would break it. Fine
   at single-worker kiosk scale; move to Redis/Postgres if scaling out.
 - **TwiML webhook auth depends on `TWILIO_PUBLIC_URL`**: X-Twilio-Signature
-  is validated against that URL, so if the tunnel URL in `.env` is stale the
-  webhook returns 403. `talkbox update` / `talkbox ngrok` keep it in sync.
+  is validated against that URL, so if `.env` is stale the webhook returns 403.
+  `talkbox update` / `talkbox twilio-sync` keep it in sync.
 - **`docker compose pull` is a trap**: images are tagged
   `ghcr.io/la-plas-growth/talkbox-*:latest` but built locally. Pulling could
   clobber local builds with stale registry images. Always use

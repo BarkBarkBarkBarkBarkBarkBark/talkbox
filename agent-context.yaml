@@ -106,7 +106,7 @@ secrets:
     TWILIO_AUTH_TOKEN: "<in .env>"
     TWILIO_PHONE_NUMBER: "+19168663653"
     TWILIO_TWIML_APP_SID: "<in .env — starts with AP>"
-    TWILIO_PUBLIC_URL: set dynamically by ngrok-update.sh on each boot (https://xxxx.ngrok-free.app)
+    TWILIO_PUBLIC_URL: set dynamically by twilio-sync.sh on each boot (https://xxxx.Tailscale Funnel-free.app)
     note: >
       Twilio trial account. Only verified numbers can receive calls.
       Italy geo permissions enabled. TwiML App configured to POST to
@@ -168,31 +168,31 @@ call_flow:
     frontend_call_screen: pointer-fork/frontend/src/components/kiosk/KioskCallScreen.jsx
 
   known_limitation: >
-    TWILIO_PUBLIC_URL changes on every Pi reboot (free ngrok plan = random URL).
-    ngrok-update.sh (systemd service) handles this automatically:
-    starts ngrok, waits for URL, PATCHes TwiML App via Twilio REST API,
+    TWILIO_PUBLIC_URL changes on every Pi reboot (free ephemeral tunnel plan = random URL).
+    twilio-sync.sh (systemd service) handles this automatically:
+    starts Tailscale Funnel, waits for URL, PATCHes TwiML App via Twilio REST API,
     rewrites .env, restarts pointer-backend container.
 
 ################################################################################
 # NGROK + SYSTEMD
 ################################################################################
 
-ngrok:
-  binary: /usr/local/bin/ngrok
-  config: /home/operator/.config/ngrok/ngrok.yml  # contains authtoken
-  log: /tmp/ngrok.log
-  api_url: http://localhost:4040/api/tunnels        # local API to read current URL
+Tailscale Funnel:
+  binary: /usr/local/bin/Tailscale Funnel
+  config: /home/operator/.config/Tailscale Funnel/Tailscale Funnel.yml  # contains authtoken
+  log: /tmp/Tailscale Funnel.log
+  api_url: http://N/A        # local API to read current URL
 
-  systemd_service: /etc/systemd/system/ngrok-update.service
-  service_script: /home/operator/talkbox/ngrok-update.sh
+  systemd_service: /etc/systemd/system/twilio-sync.service
+  service_script: /home/operator/talkbox/twilio-sync.sh
   service_status: |
-    sudo systemctl status ngrok-update.service
-    journalctl -u ngrok-update.service -f
+    sudo systemctl status twilio-sync.service
+    journalctl -u twilio-sync.service -f
 
   update_script_steps:
-    1: pkill any existing ngrok
-    2: nohup ngrok http 8085 &
-    3: poll localhost:4040/api/tunnels until URL appears (up to 30s)
+    1: N/A
+    2: N/A
+    3: poll N/A until URL appears (up to 30s)
     4: >
       curl -X POST https://api.twilio.com/2010-04-01/Accounts/{SID}/Applications/{APP_SID}.json
         -u {SID}:{TOKEN} --data-urlencode "VoiceUrl={NGROK_URL}/api/kiosk/call/twiml"
@@ -200,8 +200,8 @@ ngrok:
     6: docker compose restart pointer-backend
 
   production_alternative: >
-    Buy ngrok static domain (~$10/mo) → set TWILIO_PUBLIC_URL to fixed domain →
-    delete ngrok-update.sh systemd service. Much simpler.
+    Buy Tailscale Funnel static domain (~$10/mo) → set TWILIO_PUBLIC_URL to fixed domain →
+    delete twilio-sync.sh systemd service. Much simpler.
 
 ################################################################################
 # HARDENING TODO — DevOps handoff
@@ -259,24 +259,24 @@ hardening_todo:
         Required before COOKIE_SECURE=1 can be set.
 
     - id: SEC-07
-      title: Replace free ngrok with static domain or Cloudflare Tunnel
+      title: Replace free ephemeral tunnel with static domain or Cloudflare Tunnel
       detail: >
-        Free ngrok = random URL on every reboot. ngrok-update.sh works around
+        Free Tailscale Funnel = random URL on every reboot. twilio-sync.sh works around
         this but is fragile. Options:
-          A) ngrok paid static domain: set once in .env + Twilio Console, done.
+          A) static public domain: set once in .env + Twilio Console, done.
           B) Cloudflare Tunnel: free, static hostname, no NAT piercing needed.
              Install: curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | ... 
              Then: cloudflared tunnel create talkbox
                    cloudflared tunnel route dns talkbox call.yourdomain.com
              Set TWILIO_PUBLIC_URL=https://call.yourdomain.com in .env.
-             Create systemd unit for cloudflared (replaces ngrok-update.sh).
+             Create systemd unit for cloudflared (replaces twilio-sync.sh).
 
     - id: SEC-08
       title: Twilio webhook signature validation
       detail: >
         Currently the /api/kiosk/call/twiml and /call/status endpoints do NOT
         validate the X-Twilio-Signature header. Any internet client can POST to
-        them if they know the ngrok URL.
+        them if they know the public URL.
         Fix: add Twilio signature validation middleware to kiosk_routes.py.
         Library: twilio.request_validator.RequestValidator
         Validate: validator.validate(url, post_data, signature)
@@ -303,7 +303,7 @@ hardening_todo:
       title: Watchdog for Docker stack
       detail: >
         If pointer-backend crashes (OOM, unhandled exception), it will restart
-        (restart: unless-stopped in compose), but the ngrok tunnel still points
+        (restart: unless-stopped in compose), but the public tunnel still points
         to the old process. Add a systemd watchdog or health-check cron that
         verifies curl http://localhost:8085/api/health responds within 10s,
         and if not, runs: docker compose -f /home/operator/talkbox/pointer-fork/docker-compose.yml restart pointer-backend
@@ -358,11 +358,11 @@ hardening_todo:
 
   priority_nice_to_have:
     - id: FEAT-01
-      title: Replace ngrok with production Twilio webhook
+      title: Replace Tailscale Funnel with production Twilio webhook
       detail: >
         Long-term: deploy backend to a cloud VM or container service with a static
-        IP/domain. Set TWILIO_PUBLIC_URL to that domain. Eliminate ngrok entirely.
-        ngrok is a development/demo workaround.
+        IP/domain. Set TWILIO_PUBLIC_URL to that domain. Eliminate tunnel churn entirely.
+        ephemeral tunnel URLs are a development/demo workaround.
 
     - id: FEAT-02
       title: Physical button mapping
@@ -425,8 +425,8 @@ key_files:
     css: pointer-fork/frontend/src/components/kiosk/kiosk.css
 
   pi_scripts:
-    ngrok_update: /home/operator/talkbox/ngrok-update.sh               # runs on boot via systemd
-    ngrok_service: /etc/systemd/system/ngrok-update.service
+    twilio_sync: /home/operator/talkbox/twilio-sync.sh               # runs on boot via systemd
+    twilio_sync_service: /etc/systemd/system/twilio-sync.service
     kiosk_autostart: /home/operator/.config/autostart/kiosk.desktop    # opens Chromium at login
 
 ################################################################################
@@ -443,7 +443,7 @@ current_status:
     - Allowlist: agencies DB + KIOSK_TEST_CALL_NUMBERS (comma-separated E.164)
     - Call UI: green Phone button (Call) + red HangUp button (End call)
     - Keypad 0 safe during live call (does NOT hang up — dedicated End Call button only)
-    - ngrok-update.sh systemd service: auto-updates Twilio TwiML App URL on reboot
+    - twilio-sync.sh systemd service: auto-updates Twilio TwiML App URL on reboot
 
   partially_working:
     - Two-way browser voice call: code complete + deployed, NOT yet tested end-to-end
@@ -476,13 +476,12 @@ quickstart:
     cd pointer-fork
     docker compose up -d --build pointer-backend pointer-frontend
 
-  restart_ngrok_service: |
-    sudo systemctl restart ngrok-update.service
-    journalctl -u ngrok-update.service -f   # watch for "Done. Talk Box is ready for calls."
+  restart_twilio_sync_service: |
+    sudo systemctl restart twilio-sync.service
+    journalctl -u twilio-sync.service -f   # watch for "Done. Talk Box is ready for calls."
 
-  view_ngrok_url: |
-    curl -s localhost:4040/api/tunnels | python3 -c \
-      "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])"
+  view_public_url: |
+    grep '^TWILIO_PUBLIC_URL=' /home/operator/talkbox/app/.env
 
   test_call_token_api: |
     # From the Pi, test the allowlist + token endpoint directly:
@@ -501,5 +500,5 @@ quickstart:
     3: "chmod 600 /home/operator/talkbox/pointer-fork/.env"
     4: "docker compose -f /home/operator/talkbox/pointer-fork/docker-compose.yml restart pointer-backend"
     5: "Implement SEC-08 (Twilio signature validation) — see kiosk_routes.py"
-    6: "Set up Cloudflare Tunnel or ngrok paid (SEC-07) to replace random ngrok URL"
+    6: "Set up Cloudflare Tunnel or Tailscale Funnel paid (SEC-07) to replace random public URL"
     7: "Implement OPS-06 (log rotation) — add logging block to docker-compose.yml"

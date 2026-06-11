@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     twilio_api_key_secret: str = Field(default="", alias="TWILIO_API_KEY_SECRET")
     twilio_phone_number: str = Field(default="", alias="TWILIO_PHONE_NUMBER")    # TwiML App SID (AP...) — required for browser Voice SDK calling.
     twilio_twiml_app_sid: str = Field(default="", alias="TWILIO_TWIML_APP_SID")
-    # Publicly reachable base URL of this backend (e.g. https://xxx.ngrok.io).
+    # Publicly reachable URL of this backend.
+    # Accepts either base URL (https://host) or full webhook URL
+    # (https://host/api/kiosk/call/twiml).
     # Twilio calls /api/kiosk/call/twiml on this URL to get dial instructions.
     twilio_public_url: str = Field(default="", alias="TWILIO_PUBLIC_URL")
     # ─── HTTP / CORS ──────────────────────────────────────────────────
