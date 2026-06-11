@@ -114,6 +114,7 @@ log "Done. Talk Box is ready for calls."
 #    [Service]
 #    Type=oneshot
 #    User=operator
+#    Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 #    ExecStart=/home/operator/talkbox/ngrok-update.sh
 #    RemainAfterExit=yes
 #    StandardOutput=journal
