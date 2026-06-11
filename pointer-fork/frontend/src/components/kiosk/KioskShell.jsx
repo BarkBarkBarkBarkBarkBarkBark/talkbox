@@ -99,6 +99,7 @@ export default function KioskShell({ demo = false }) {
             simulated={state.callSimulated}
             reason={state.callReason}
             onKey={handleKey}
+            onHangUp={hangUp}
           />
         );
       case SCREENS.EMPTY:

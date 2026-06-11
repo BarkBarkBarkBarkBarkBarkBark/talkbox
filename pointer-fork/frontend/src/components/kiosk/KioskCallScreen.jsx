@@ -43,7 +43,7 @@ const STATUS_LABEL = {
   failed:        "Call not placed",
 };
 
-export function KioskCallActive({ item, status, simulated, reason, onKey }) {
+export function KioskCallActive({ item, status, simulated, reason, onKey, onHangUp }) {
   const label = STATUS_LABEL[status] || "Calling…";
   const isLive = !simulated && (status === "in-progress" || status === "connected");
   const isPulsing = status === "connecting" || status === "ringing";
@@ -61,7 +61,11 @@ export function KioskCallActive({ item, status, simulated, reason, onKey }) {
           <p className="kiosk-subtitle">This is a demonstration. No real call is placed.</p>
         ) : null}
         <div className="kiosk-actions">
-          <button type="button" className={isLive ? "kiosk-action hangup" : "kiosk-action back"} onClick={() => onKey?.("0")}>
+          <button
+            type="button"
+            className={isLive ? "kiosk-action hangup" : "kiosk-action back"}
+            onClick={() => isLive ? onHangUp?.() : onKey?.("0")}
+          >
             {isLive ? <HangUpIcon /> : null} {isLive ? "End call" : "Go back"}
           </button>
         </div>

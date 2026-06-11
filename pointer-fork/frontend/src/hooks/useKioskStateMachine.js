@@ -152,7 +152,7 @@ function describeScreen(state) {
     case SCREENS.CALL_CONFIRM:
       return `Call ${state.selected?.name || "this resource"}? Press hash to confirm, or zero to cancel.`;
     case SCREENS.CALL_ACTIVE:
-      return "Call in progress. Press zero or red to hang up.";
+      return "Call in progress. Press the red End Call button to hang up.";
     case SCREENS.EMPTY:
       return state.spokenSummary || "No match found. You can call 211 for help.";
     case SCREENS.ERROR:
@@ -464,7 +464,9 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
 
         case SCREENS.CALL_ACTIVE: {
-          if (key === "0") hangUp();
+          // Keypad digits during an active call are intentionally swallowed —
+          // the user may need to dial 0 on the remote IVR. Hang-up is only
+          // triggered by the explicit End Call button (onHangUp prop).
           return;
         }
 
