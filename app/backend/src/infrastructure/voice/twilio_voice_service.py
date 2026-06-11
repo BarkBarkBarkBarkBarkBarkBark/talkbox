@@ -41,9 +41,16 @@ class TwilioVoiceService:
 
     @property
     def browser_calling_configured(self) -> bool:
-        """True when the TwiML App SID and public URL are also set."""
+        """True when TwiML App SID, public URL, and a signing API Key are set.
+
+        A real API Key (SK…) + secret is mandatory: Twilio rejects Voice
+        access tokens signed with the account SID/auth token.
+        """
         return self.configured and bool(
-            settings.twilio_twiml_app_sid and settings.twilio_public_url
+            settings.twilio_twiml_app_sid
+            and settings.twilio_public_url
+            and settings.twilio_api_key_sid
+            and settings.twilio_api_key_secret
         )
 
     def _get_client(self) -> Client:
@@ -76,10 +83,10 @@ class TwilioVoiceService:
 
         token = AccessToken(
             settings.twilio_account_sid,
-            # API Key SID + Secret are recommended; fall back to account
-            # credentials which also work for development.
-            settings.twilio_account_sid,
-            settings.twilio_auth_token,
+            # Twilio requires a real API Key (SK…) + secret as the signing
+            # key — account SID/auth token are rejected (error 20101).
+            settings.twilio_api_key_sid,
+            settings.twilio_api_key_secret,
             identity=identity,
             ttl=90,  # seconds — short-lived; enough for confirm + connect
         )

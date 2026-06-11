@@ -184,6 +184,12 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       };
       const mapped = map[sdkStatus];
       if (mapped) {
+        if (sdkStatus === "failed") {
+          kioskApi.logEvent({
+            event_type: "call_error",
+            payload: { reason: reason || "unknown" },
+          });
+        }
         dispatch({ type: "CALL_STATUS", ...mapped });
       } else if (sdkStatus === "ended") {
         dispatch({ type: "BACK_TO_RESULTS" });

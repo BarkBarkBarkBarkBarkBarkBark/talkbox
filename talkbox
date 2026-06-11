@@ -201,7 +201,6 @@ cmd_ngrok() {
     [ "${1:-}" = "--new" ] && force="force"
 
     step "Refreshing ngrok tunnel"
-    local old_url; old_url=$(env_val TWILIO_PUBLIC_URL)
     ensure_ngrok "$force"
 
     step "Publishing webhook to Twilio"
@@ -209,14 +208,58 @@ cmd_ngrok() {
     write_public_url
 
     step "Syncing backend"
-    if [ "$old_url" = "$NGROK_URL" ]; then
-        ok "URL unchanged — backend restart not needed"
+    # Compare against the *container's* env — that's what signature validation
+    # actually uses. (.env alone can be right while the container is stale.)
+    local container_url
+    container_url="$(docker exec talkbox-backend printenv TWILIO_PUBLIC_URL 2>/dev/null || true)"
+    if [ "$container_url" = "$NGROK_URL" ]; then
+        ok "Backend already has $NGROK_URL — no restart needed"
     else
-        note "URL changed — restarting backend..."
-        docker compose restart talkbox-backend >/dev/null 2>&1
+        note "Backend env stale ('$container_url') — recreating (restart won't reload .env)..."
+        docker compose up -d --force-recreate talkbox-backend >/dev/null 2>&1
         wait_for_health
     fi
     summary_box
+}
+
+twilio_voice_url() {
+    curl -s --max-time 10 -u "${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}" \
+        "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Applications/${TWIML_APP_SID}.json" 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('voice_url',''))" 2>/dev/null || true
+}
+
+cmd_watchdog() {
+    # Periodic self-heal: verify tunnel ↔ .env ↔ backend container ↔ Twilio
+    # are all in sync; if anything drifted, run the full ngrok repair path.
+    cd "$REPO_DIR"
+    require_env
+
+    local live env_url container_url voice_url drift=""
+    live="$(current_ngrok_url)"
+    env_url="$(env_val TWILIO_PUBLIC_URL)"
+    container_url="$(docker exec talkbox-backend printenv TWILIO_PUBLIC_URL 2>/dev/null || true)"
+
+    if [ -z "$live" ]; then
+        drift="ngrok tunnel down"
+    elif [ "$env_url" != "$live" ]; then
+        drift=".env has '$env_url'"
+    elif [ "$container_url" != "$live" ]; then
+        drift="backend container has '$container_url'"
+    else
+        voice_url="$(twilio_voice_url)"
+        # Empty = Twilio API unreachable (offline?) — don't thrash, check next run.
+        if [ -n "$voice_url" ] && [ "$voice_url" != "${live}${TWIML_ROUTE}" ]; then
+            drift="Twilio VoiceUrl is '$voice_url'"
+        fi
+    fi
+
+    if [ -z "$drift" ]; then
+        ok "watchdog: in sync ($live)"
+        return 0
+    fi
+
+    warn "watchdog: $drift — repairing..."
+    cmd_ngrok
 }
 
 cmd_status() {
@@ -272,6 +315,60 @@ cmd_logs() {
     docker logs -f --tail 100 "${1:-talkbox-backend}"
 }
 
+kiosk_launch_cmd() {
+    # The exact command the desktop session uses to start the kiosk browser.
+    # Prefer the autostart entry so we stay in sync with how the Pi boots it;
+    # fall back to a sane default targeting the frontend port.
+    local desktop="$HOME/.config/autostart/kiosk.desktop"
+    if [ -f "$desktop" ]; then
+        local exec_line
+        exec_line=$(grep -E '^Exec=' "$desktop" | head -1 | cut -d= -f2-)
+        if [ -n "$exec_line" ]; then
+            printf '%s' "$exec_line"
+            return
+        fi
+    fi
+    printf '%s' "chromium --kiosk --noerrdialogs --disable-infobars --no-first-run http://localhost:${FRONTEND_PORT}/kiosk"
+}
+
+cmd_refresh() {
+    # Reload the on-screen kiosk browser without rebooting. Vite assets are
+    # content-hashed, so a plain reload picks up the latest build.
+    local disp="${DISPLAY:-:0}"
+    local xauth="${XAUTHORITY:-$HOME/.Xauthority}"
+
+    # Preferred: soft in-place reload via xdotool (no flicker), if available.
+    if command -v xdotool >/dev/null 2>&1; then
+        local wid
+        wid=$(DISPLAY="$disp" XAUTHORITY="$xauth" xdotool search --class chromium 2>/dev/null | head -1)
+        if [ -n "$wid" ]; then
+            DISPLAY="$disp" XAUTHORITY="$xauth" xdotool key --window "$wid" ctrl+shift+r
+            ok "Sent hard-reload (Ctrl+Shift+R) to kiosk browser"
+            return
+        fi
+    fi
+
+    # Fallback: kill Chromium and relaunch it ourselves. Nothing else respawns
+    # it — the desktop autostart entry only fires once at session start.
+    note "xdotool not available — restarting Chromium..."
+    pkill -f "chromium" 2>/dev/null || true
+    sleep 2
+
+    local cmd; cmd="$(kiosk_launch_cmd)"
+    DISPLAY="$disp" XAUTHORITY="$xauth" setsid bash -c "$cmd" >/tmp/talkbox-kiosk.log 2>&1 &
+    disown
+
+    for i in 1 2 3 4 5 6; do
+        sleep 2
+        if pgrep -f "chromium .*--kiosk" >/dev/null 2>&1; then
+            ok "Kiosk browser relaunched on $disp"
+            note "Tip: 'sudo apt install xdotool' enables instant flicker-free reloads"
+            return
+        fi
+    done
+    warn "Chromium did not come back — check /tmp/talkbox-kiosk.log"
+}
+
 cmd_install() {
     mkdir -p "$HOME/.local/bin"
     ln -sf "$SCRIPT_PATH" "$HOME/.local/bin/talkbox"
@@ -293,7 +390,9 @@ usage() {
     echo -e "  ${BOLD}talkbox update${NC}    git pull → rebuild → relaunch → ngrok → Twilio → health"
     echo -e "  ${BOLD}talkbox ngrok${NC}     refresh tunnel + publish to Twilio  (--new = new URL)"
     echo -e "  ${BOLD}talkbox status${NC}    containers, health, tunnel, Twilio sync"
+    echo -e "  ${BOLD}talkbox watchdog${NC}  check tunnel/.env/backend/Twilio sync, repair if drifted"
     echo -e "  ${BOLD}talkbox restart${NC}   restart containers (no rebuild)"
+    echo -e "  ${BOLD}talkbox refresh${NC}   reload the on-screen kiosk browser (no reboot)"
     echo -e "  ${BOLD}talkbox logs${NC}      tail backend logs  (talkbox logs talkbox-frontend)"
     echo -e "  ${BOLD}talkbox install${NC}   put 'talkbox' on your PATH"
     echo ""
@@ -303,7 +402,9 @@ case "${1:-}" in
     update)  cmd_update ;;
     ngrok)   shift; cmd_ngrok "$@" ;;
     status)  cmd_status ;;
+    watchdog) cmd_watchdog ;;
     restart) cmd_restart ;;
+    refresh) cmd_refresh ;;
     logs)    shift || true; cmd_logs "$@" ;;
     install) cmd_install ;;
     *)       usage ;;

@@ -76,10 +76,12 @@ export function useKioskVoiceCall({ onStatus }) {
       try {
         call = await device.connect({ params: { identity: tokenData.identity } });
       } catch (err) {
-        const message = String(err?.message || "");
+        const message = String(err?.message || "").trim();
         const reason = /permission|denied|notallowed/i.test(message)
           ? "Microphone access was blocked. Please allow the microphone."
-          : "Could not connect the call.";
+          : message
+            ? `Could not connect the call. ${message}`
+            : "Could not connect the call.";
         updateStatus("failed", reason);
         teardown();
         return;
