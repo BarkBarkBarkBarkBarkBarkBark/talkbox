@@ -1,0 +1,505 @@
+################################################################################
+# TALKBOX — AGENT HANDOFF CONTEXT
+# Updated: 2026-06-10
+# For: DevOps hardening pass
+# Author notes: This file is machine-readable context for the next agent/dev.
+#               Read the whole thing before touching anything.
+################################################################################
+
+project:
+  name: TalkBox
+  description: >
+    Touchscreen social-services kiosk running on a Raspberry Pi 5 (2 GB RAM).
+    Users type or speak a need ("I need shelter"), the system queries a pgvector
+    database of local agencies, and displays results with one-touch calling.
+    Calls are real two-way voice (Twilio Browser Voice SDK) — the Pi's browser
+    acts as a soft-phone. Target users are unhoused/vulnerable individuals at a
+    kiosk in a nonprofit or social-services facility.
+  repo: https://github.com/BarkBarkBarkBarkBarkBarkBark/talkbox.git
+  branch: main
+  local_path_windows: C:\Users\MarcoDelFava\PycharmProjects\PythonProject\talkbox
+  local_path_pi: /home/operator/talkbox
+
+################################################################################
+# INFRASTRUCTURE
+################################################################################
+
+infrastructure:
+  pi:
+    model: Raspberry Pi 5 (2 GB RAM)
+    os: Raspberry Pi OS Lite (Bookworm / Debian 12 aarch64)
+    hostname: hosaka
+    user: operator
+    password: neuro
+    ssh: ssh operator@hosaka
+    display: >
+      LXDE desktop via raspberrypi-ui-mods. Autologin via raspi-config B4.
+      Chromium opens at boot via ~/.config/autostart/kiosk.desktop.
+    kiosk_url: http://localhost:8084/kiosk
+    audio: USB microphone required for two-way calls (plugged into Pi USB port)
+
+  docker:
+    compose_file: /home/operator/talkbox/pointer-fork/docker-compose.yml
+    root_compose: /home/operator/talkbox/docker-compose.yml  # uses `include:` + name: pointer-fork
+    containers:
+      pointer-postgres:
+        image: pgvector/pgvector:pg18
+        role: Postgres 18 with pgvector extension (vector similarity search)
+        data_volume: postgres-data (persisted across rebuilds)
+        network: pointer-network (internal only, no exposed port)
+      pointer-backend:
+        image: built from pointer-fork/backend/
+        role: FastAPI Python 3.13 (Alpine), runs migrations + seeds on boot
+        port: "127.0.0.1:8085 -> container:8000"
+        entrypoint: pointer-fork/backend/docker-entrypoint.sh
+        note: runs `python main.py seed` (alembic migrations + pgvector seed + admin seed) then uvicorn
+      pointer-frontend:
+        image: built from pointer-fork/frontend/
+        role: React 19 + Vite, served via nginx
+        port: "0.0.0.0:8084 -> container:80"
+        note: nginx also reverse-proxies /api/* to pointer-backend:8000
+
+  rebuild_commands:
+    frontend_only: |
+      cd /home/operator/talkbox/pointer-fork
+      docker compose up -d --build pointer-frontend
+    backend_only: |
+      cd /home/operator/talkbox/pointer-fork
+      docker compose up -d --build pointer-backend
+    full_rebuild: |
+      cd /home/operator/talkbox/pointer-fork
+      docker compose up -d --build
+    pull_and_rebuild: |
+      cd /home/operator/talkbox
+      git fetch origin && git reset --hard origin/main
+      cd pointer-fork
+      docker compose up -d --build pointer-backend pointer-frontend
+    view_logs: |
+      docker logs pointer-backend -f
+      docker logs pointer-frontend -f
+    health_check: |
+      curl -fsS http://localhost:8085/api/health
+      curl -fsS http://localhost:8084/ -o /dev/null -w 'HTTP %{http_code}'
+
+################################################################################
+# CREDENTIALS & SECRETS (all stored in pointer-fork/.env — NOT committed to git)
+################################################################################
+
+secrets:
+  env_file: /home/operator/talkbox/pointer-fork/.env
+  note: .env is gitignored. Never commit it. The .env.example shows the schema.
+
+  postgres:
+    POSTGRES_DB: pointer
+    POSTGRES_USER: pointer
+    POSTGRES_PASSWORD: pointer
+
+  openai:
+    OPENAI_API_KEY: "sk-proj-O524C0sg...  (real key, in .env)"
+    LLM_PROVIDER: openai
+    MODEL: gpt-4o-mini
+    EMBEDDINGS_PROVIDER: openai
+    EMBEDDINGS_MODEL: text-embedding-3-small
+
+  twilio:
+    TWILIO_ACCOUNT_SID: "<in .env — starts with AC>"
+    TWILIO_AUTH_TOKEN: "<in .env>"
+    TWILIO_PHONE_NUMBER: "+19168663653"
+    TWILIO_TWIML_APP_SID: "<in .env — starts with AP>"
+    TWILIO_PUBLIC_URL: set dynamically by ngrok-update.sh on each boot (https://xxxx.ngrok-free.app)
+    note: >
+      Twilio trial account. Only verified numbers can receive calls.
+      Italy geo permissions enabled. TwiML App configured to POST to
+      ${TWILIO_PUBLIC_URL}/api/kiosk/call/twiml.
+
+  calling:
+    KIOSK_CALLING_ENABLED: "true"
+    KIOSK_TEST_CALL_NUMBERS: "+17076376544,+12792072398"
+    note: >
+      These numbers bypass the agencies-DB allowlist (test/dev only).
+      Production numbers must exist in the agencies database.
+
+  auth:
+    JWT_SECRET: change-me-in-production   # MUST be rotated before public deploy
+    COOKIE_SECURE: "0"                    # set to 1 when behind HTTPS
+    ADMIN_EMAIL: mdelfava@firststepcommunities.org
+    ADMIN_PASSWORD: admin                  # MUST be changed before public deploy
+
+################################################################################
+# ARCHITECTURE — CALL FLOW
+################################################################################
+
+call_flow:
+  description: >
+    Two-way browser Voice SDK call. The Pi browser acts as a Twilio soft-phone.
+    No PSTN trunk required on the kiosk — Twilio bridges browser ↔ PSTN.
+
+  sequence:
+    1_user_dials: User enters a number on the keypad or selects an agency from results.
+    2_allowlist_check: >
+      Frontend POSTs to /api/kiosk/call/token with {phone, name}.
+      Backend normalizes number, checks agencies DB + KIOSK_TEST_CALL_NUMBERS.
+      Returns 403 if not allowlisted.
+    3_token_issued: >
+      Backend generates a 90-second Twilio Voice JWT (AccessToken + VoiceGrant)
+      with outgoing_application_sid=TWILIO_TWIML_APP_SID.
+      Stores pending call in in-memory dict: {identity -> {to, agency, expires}}.
+      Returns {token, identity, agency}.
+    4_browser_connects: >
+      Frontend useKioskVoiceCall hook initialises Twilio Device with the token,
+      calls device.register() then device.connect({params: {identity}}).
+    5_twilio_webhooks: >
+      Twilio POSTs to TWILIO_PUBLIC_URL/api/kiosk/call/twiml.
+      Backend looks up identity in pending dict, returns <Dial><Number>to</Number></Dial>.
+      Twilio bridges the browser audio to the PSTN number.
+    6_status_callbacks: >
+      Twilio POSTs lifecycle events to /api/kiosk/call/status (logged, not acted on yet).
+    7_hang_up: >
+      User presses red "End call" button → connection.disconnect() → device.destroy().
+      UI transitions back to results screen.
+
+  key_files:
+    backend_token_endpoint: pointer-fork/backend/src/presentation/kiosk_routes.py  # POST /api/kiosk/call/token
+    backend_twiml_endpoint: pointer-fork/backend/src/presentation/kiosk_routes.py  # POST /api/kiosk/call/twiml
+    backend_voice_service: pointer-fork/backend/src/infrastructure/voice/twilio_voice_service.py
+    backend_allowlist: pointer-fork/backend/src/application/services/kiosk_call_service.py
+    frontend_hook: pointer-fork/frontend/src/hooks/useKioskVoiceCall.js
+    frontend_state_machine: pointer-fork/frontend/src/hooks/useKioskStateMachine.js
+    frontend_call_screen: pointer-fork/frontend/src/components/kiosk/KioskCallScreen.jsx
+
+  known_limitation: >
+    TWILIO_PUBLIC_URL changes on every Pi reboot (free ngrok plan = random URL).
+    ngrok-update.sh (systemd service) handles this automatically:
+    starts ngrok, waits for URL, PATCHes TwiML App via Twilio REST API,
+    rewrites .env, restarts pointer-backend container.
+
+################################################################################
+# NGROK + SYSTEMD
+################################################################################
+
+ngrok:
+  binary: /usr/local/bin/ngrok
+  config: /home/operator/.config/ngrok/ngrok.yml  # contains authtoken
+  log: /tmp/ngrok.log
+  api_url: http://localhost:4040/api/tunnels        # local API to read current URL
+
+  systemd_service: /etc/systemd/system/ngrok-update.service
+  service_script: /home/operator/talkbox/ngrok-update.sh
+  service_status: |
+    sudo systemctl status ngrok-update.service
+    journalctl -u ngrok-update.service -f
+
+  update_script_steps:
+    1: pkill any existing ngrok
+    2: nohup ngrok http 8085 &
+    3: poll localhost:4040/api/tunnels until URL appears (up to 30s)
+    4: >
+      curl -X POST https://api.twilio.com/2010-04-01/Accounts/{SID}/Applications/{APP_SID}.json
+        -u {SID}:{TOKEN} --data-urlencode "VoiceUrl={NGROK_URL}/api/kiosk/call/twiml"
+    5: sed -i TWILIO_PUBLIC_URL= in .env
+    6: docker compose restart pointer-backend
+
+  production_alternative: >
+    Buy ngrok static domain (~$10/mo) → set TWILIO_PUBLIC_URL to fixed domain →
+    delete ngrok-update.sh systemd service. Much simpler.
+
+################################################################################
+# HARDENING TODO — DevOps handoff
+################################################################################
+
+hardening_todo:
+  priority_critical:
+    - id: SEC-01
+      title: Rotate JWT_SECRET
+      detail: >
+        Currently "change-me-in-production" in .env.
+        Generate: openssl rand -hex 32
+        Update pointer-fork/.env on Pi, then docker compose restart pointer-backend.
+
+    - id: SEC-02
+      title: Change ADMIN_PASSWORD
+      detail: >
+        Currently "admin". Change in .env + restart backend.
+        The admin account is seeded once at boot by src/infrastructure/seed_admin.py.
+        Changing the .env value alone won't update an already-seeded account —
+        you must also update it in the DB:
+        docker exec -it pointer-backend python -c "
+        from src.infrastructure.database import get_db_connection; ..."
+        Or: docker compose down -v (drops DB) then up --build (re-seeds with new password).
+        WARNING: dropping volumes also wipes pgvector embeddings — must re-seed.
+
+    - id: SEC-03
+      title: Set COOKIE_SECURE=1 behind HTTPS
+      detail: >
+        Currently 0 (plain HTTP, local dev). Set to 1 once TLS is in place.
+        Required for cookie-based JWT auth to be secure.
+
+    - id: SEC-04
+      title: Restrict CORS_ORIGINS
+      detail: >
+        Currently "*". Set to the actual frontend origin once deployed behind a
+        domain (e.g. "https://kiosk.yourdomain.org").
+
+    - id: SEC-05
+      title: Move Twilio credentials to secrets manager or env injection
+      detail: >
+        Currently in plaintext .env on the Pi filesystem.
+        For production: use Docker secrets, Vault, or at minimum chmod 600 .env
+        and ensure it's owned by the operator user only.
+        chmod 600 /home/operator/talkbox/pointer-fork/.env
+
+    - id: SEC-06
+      title: TLS / HTTPS for the kiosk
+      detail: >
+        Currently plain HTTP on port 8084 (loopback-only backend on 8085).
+        Options:
+          A) Tailscale HTTPS (easiest — installs in 5 min, provides cert for Pi)
+          B) Caddy reverse proxy (port 443 → 8084, auto-cert via Let's Encrypt)
+          C) Cloudflare Tunnel (free, no port forwarding needed)
+        Required before COOKIE_SECURE=1 can be set.
+
+    - id: SEC-07
+      title: Replace free ngrok with static domain or Cloudflare Tunnel
+      detail: >
+        Free ngrok = random URL on every reboot. ngrok-update.sh works around
+        this but is fragile. Options:
+          A) ngrok paid static domain: set once in .env + Twilio Console, done.
+          B) Cloudflare Tunnel: free, static hostname, no NAT piercing needed.
+             Install: curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | ... 
+             Then: cloudflared tunnel create talkbox
+                   cloudflared tunnel route dns talkbox call.yourdomain.com
+             Set TWILIO_PUBLIC_URL=https://call.yourdomain.com in .env.
+             Create systemd unit for cloudflared (replaces ngrok-update.sh).
+
+    - id: SEC-08
+      title: Twilio webhook signature validation
+      detail: >
+        Currently the /api/kiosk/call/twiml and /call/status endpoints do NOT
+        validate the X-Twilio-Signature header. Any internet client can POST to
+        them if they know the ngrok URL.
+        Fix: add Twilio signature validation middleware to kiosk_routes.py.
+        Library: twilio.request_validator.RequestValidator
+        Validate: validator.validate(url, post_data, signature)
+        Return 403 if invalid.
+
+    - id: SEC-09
+      title: Pending call store — move to Redis or Postgres
+      detail: >
+        Currently _pending_calls is an in-memory dict in kiosk_routes.py.
+        It is lost on backend restart and does not scale to multiple workers.
+        For production: store in Redis (already a common Docker sidecar) or
+        a postgres table with TTL cleanup via pg_cron or a background task.
+
+    - id: SEC-10
+      title: Rate limiting on call/token endpoint
+      detail: >
+        Currently no rate limiting. A malicious client could hammer /api/kiosk/call/token
+        trying to probe the allowlist.
+        Fix: add SlowAPI or fastapi-limiter (Redis-backed) to kiosk_routes.py.
+        Suggested limit: 5 requests / 60 seconds per IP.
+
+  priority_operational:
+    - id: OPS-01
+      title: Watchdog for Docker stack
+      detail: >
+        If pointer-backend crashes (OOM, unhandled exception), it will restart
+        (restart: unless-stopped in compose), but the ngrok tunnel still points
+        to the old process. Add a systemd watchdog or health-check cron that
+        verifies curl http://localhost:8085/api/health responds within 10s,
+        and if not, runs: docker compose -f /home/operator/talkbox/pointer-fork/docker-compose.yml restart pointer-backend
+
+    - id: OPS-02
+      title: Persistent call event logging
+      detail: >
+        /api/kiosk/call/status currently only logs to stdout (captured by Docker).
+        Events should be written to a DB table (kiosk_events) for analytics:
+        who called what, call duration, success/failure rates.
+        Schema is already partially defined in the alembic migrations dir.
+
+    - id: OPS-03
+      title: USB microphone auto-detection
+      detail: >
+        The Pi requires a USB microphone for two-way calls. If it's unplugged,
+        the browser will silently fail or prompt for permissions.
+        Add a startup check in the frontend that calls navigator.mediaDevices.getUserMedia()
+        on load and shows a "Microphone not found" banner in the status bar if it fails.
+
+    - id: OPS-04
+      title: Chromium kiosk — disable sleep/blanking
+      detail: >
+        Pi LXDE will blank the screen after inactivity. For a public kiosk:
+        Add to ~/.config/autostart/kiosk.desktop (or a separate autostart entry):
+          xset s off
+          xset -dpms
+          xset s noblank
+        Or create /etc/X11/xorg.conf.d/10-blanking.conf.
+
+    - id: OPS-05
+      title: Auto-update mechanism
+      detail: >
+        Currently the Pi must be manually SSH'd to pull + rebuild.
+        Options:
+          A) Watchtower Docker container (polls GHCR for new image tags, auto-pulls)
+          B) GitHub Actions CI → builds + pushes to GHCR on every push to main →
+             Watchtower on Pi detects new tag, pulls, restarts.
+          C) Simple cron: 0 3 * * * cd /home/operator/talkbox && git pull --rebase && docker compose up -d --build
+        Option B is recommended long-term (proper CD pipeline).
+
+    - id: OPS-06
+      title: Log rotation
+      detail: >
+        Docker logs are unlimited by default. Add to pointer-fork/docker-compose.yml
+        under each service:
+          logging:
+            driver: json-file
+            options:
+              max-size: "10m"
+              max-file: "3"
+
+  priority_nice_to_have:
+    - id: FEAT-01
+      title: Replace ngrok with production Twilio webhook
+      detail: >
+        Long-term: deploy backend to a cloud VM or container service with a static
+        IP/domain. Set TWILIO_PUBLIC_URL to that domain. Eliminate ngrok entirely.
+        ngrok is a development/demo workaround.
+
+    - id: FEAT-02
+      title: Physical button mapping
+      detail: >
+        The UI "Call" (green) and "End call" (red) buttons are currently rendered
+        in the browser and clicked with a touchscreen.
+        The hardware plan is to wire physical arcade-style buttons to the Pi GPIO.
+        Map: GPIO button press → keyboard event injection via udev/xdotool →
+        browser receives keypress → state machine handles it.
+        Note: "End call" button uses a dedicated onHangUp callback (NOT a keypress),
+        so GPIO should either: (a) inject a DOM click event on the button element,
+        or (b) use a custom JS event listener added to useKioskVoiceCall.
+
+    - id: FEAT-03
+      title: Accessibility / TTS
+      detail: >
+        TTS (text-to-speech) is partially implemented via browser speechSynthesis
+        in pointer-fork/frontend/src/lib/tts.js. Not all screens have TTS prompts.
+        Full accessibility pass needed before public deployment.
+
+    - id: FEAT-04
+      title: Agencies database — Sacramento county data
+      detail: >
+        The pgvector database is seeded from pointer-fork/database/sacramento.db
+        (SQLite, mounted read-only into the backend container).
+        This is the allowlist for real calls — only agencies in this DB can be
+        dialed (outside of KIOSK_TEST_CALL_NUMBERS).
+        Current state: partially populated. Needs full Sacramento county 211 data.
+        Migration script: pointer-fork/scripts/rebuild_healthscout_db.py
+
+################################################################################
+# KEY FILE MAP
+################################################################################
+
+key_files:
+  env_file: pointer-fork/.env                                          # secrets, NOT committed
+  env_schema: pointer-fork/.env.example                                # committed schema/template
+  docker_compose: pointer-fork/docker-compose.yml                      # main orchestration
+  root_compose: docker-compose.yml                                      # thin wrapper (name: pointer-fork)
+
+  backend:
+    entrypoint: pointer-fork/backend/docker-entrypoint.sh              # migrations + seed + uvicorn
+    main: pointer-fork/backend/main.py
+    api_router: pointer-fork/backend/src/presentation/api.py
+    kiosk_routes: pointer-fork/backend/src/presentation/kiosk_routes.py   # all /api/kiosk/* endpoints
+    config: pointer-fork/backend/src/infrastructure/config.py          # pydantic settings (reads .env)
+    voice_service: pointer-fork/backend/src/infrastructure/voice/twilio_voice_service.py
+    call_service: pointer-fork/backend/src/application/services/kiosk_call_service.py  # allowlist logic
+    alembic_versions: pointer-fork/backend/alembic/versions/           # DB migrations
+
+  frontend:
+    entry: pointer-fork/frontend/src/main.jsx
+    kiosk_page: pointer-fork/frontend/src/pages/KioskPage.jsx
+    kiosk_shell: pointer-fork/frontend/src/components/kiosk/KioskShell.jsx   # screen router
+    state_machine: pointer-fork/frontend/src/hooks/useKioskStateMachine.js   # all UX state
+    voice_hook: pointer-fork/frontend/src/hooks/useKioskVoiceCall.js         # Twilio Device lifecycle
+    api_client: pointer-fork/frontend/src/lib/kioskApi.js                    # all backend API calls
+    call_screen: pointer-fork/frontend/src/components/kiosk/KioskCallScreen.jsx
+    dialpad: pointer-fork/frontend/src/components/kiosk/KioskDialPad.jsx
+    css: pointer-fork/frontend/src/components/kiosk/kiosk.css
+
+  pi_scripts:
+    ngrok_update: /home/operator/talkbox/ngrok-update.sh               # runs on boot via systemd
+    ngrok_service: /etc/systemd/system/ngrok-update.service
+    kiosk_autostart: /home/operator/.config/autostart/kiosk.desktop    # opens Chromium at login
+
+################################################################################
+# CURRENT STATUS (as of 2026-06-10)
+################################################################################
+
+current_status:
+  working:
+    - Docker stack (postgres + backend + frontend) running on Pi, healthy
+    - Kiosk UI opens fullscreen in Chromium on boot
+    - Query flow: user types need → pgvector search → agency results displayed
+    - Dialpad layout: split landscape (controls left, keypad right, all rows visible)
+    - Branding: "Talk Box" in status bar, date+time clock
+    - Allowlist: agencies DB + KIOSK_TEST_CALL_NUMBERS (comma-separated E.164)
+    - Call UI: green Phone button (Call) + red HangUp button (End call)
+    - Keypad 0 safe during live call (does NOT hang up — dedicated End Call button only)
+    - ngrok-update.sh systemd service: auto-updates Twilio TwiML App URL on reboot
+
+  partially_working:
+    - Two-way browser voice call: code complete + deployed, NOT yet tested end-to-end
+      with a real call through the new SDK path. Pi needs to be rebuilt with latest
+      image (docker compose up -d --build pointer-backend pointer-frontend) and
+      then a real call attempt made with a USB mic plugged in.
+
+  not_working_or_not_started:
+    - Twilio webhook signature validation (SEC-08)
+    - TLS / HTTPS (SEC-06)
+    - JWT_SECRET + ADMIN_PASSWORD not rotated (SEC-01, SEC-02)
+    - Physical GPIO button wiring (FEAT-02)
+    - Auto-update / CI/CD pipeline (OPS-05)
+    - Full agencies database population (FEAT-04)
+
+################################################################################
+# QUICKSTART FOR NEW DEV/AGENT
+################################################################################
+
+quickstart:
+  ssh_into_pi: ssh operator@hosaka   # password: neuro
+  check_stack: |
+    docker ps
+    curl -fsS http://localhost:8085/api/health
+    curl -fsS http://localhost:8084/ -o /dev/null -w 'frontend HTTP %{http_code}'
+
+  pull_latest_and_rebuild: |
+    cd /home/operator/talkbox
+    git fetch origin && git reset --hard origin/main
+    cd pointer-fork
+    docker compose up -d --build pointer-backend pointer-frontend
+
+  restart_ngrok_service: |
+    sudo systemctl restart ngrok-update.service
+    journalctl -u ngrok-update.service -f   # watch for "Done. Talk Box is ready for calls."
+
+  view_ngrok_url: |
+    curl -s localhost:4040/api/tunnels | python3 -c \
+      "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])"
+
+  test_call_token_api: |
+    # From the Pi, test the allowlist + token endpoint directly:
+    curl -s -X POST http://localhost:8085/api/kiosk/call/token \
+      -H 'Content-Type: application/json' \
+      -d '{"phone":"+17076376544","name":"test"}' | python3 -m json.tool
+    # Expected: {"token":"...", "identity":"...", "agency":"..."}
+    # 403 = number not allowlisted
+    # 503 = TWILIO_TWIML_APP_SID or TWILIO_PUBLIC_URL not set in .env
+
+  edit_env: nano /home/operator/talkbox/pointer-fork/.env
+
+  first_hardening_steps:
+    1: "openssl rand -hex 32  # copy output → JWT_SECRET in .env"
+    2: "nano /home/operator/talkbox/pointer-fork/.env  # set JWT_SECRET, ADMIN_PASSWORD, COOKIE_SECURE"
+    3: "chmod 600 /home/operator/talkbox/pointer-fork/.env"
+    4: "docker compose -f /home/operator/talkbox/pointer-fork/docker-compose.yml restart pointer-backend"
+    5: "Implement SEC-08 (Twilio signature validation) — see kiosk_routes.py"
+    6: "Set up Cloudflare Tunnel or ngrok paid (SEC-07) to replace random ngrok URL"
+    7: "Implement OPS-06 (log rotation) — add logging block to docker-compose.yml"
