@@ -31,6 +31,5 @@ logs/
 *.log
 
 # ───── Large local-only datasets (>GitHub limits / generated) ─────
-Health Scout/Pointer Databases/
 Health Scout/unnessecary/
 PDF_Analyzer/OutputDir/

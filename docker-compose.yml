@@ -1,9 +1,9 @@
 # Talkbox monorepo — root compose.
-# Delegates to the Pointer kiosk stack (postgres + backend + frontend).
+# Delegates to the kiosk stack in app/ (postgres + backend + frontend).
 # Run everything from the repo root:
-#   docker compose up -d --build
-name: pointer-fork
+#   ./talkbox update        (or: docker compose up -d --build)
+name: talkbox
 
 include:
-  - path: pointer-fork/docker-compose.yml
-    env_file: pointer-fork/.env
+  - path: app/docker-compose.yml
+    env_file: app/.env

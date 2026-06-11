@@ -16,7 +16,7 @@ set -euo pipefail
 # ── Locations ─────────────────────────────────────────────────────────────────
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 REPO_DIR="$(dirname "$SCRIPT_PATH")"
-ENV_FILE="$REPO_DIR/pointer-fork/.env"
+ENV_FILE="$REPO_DIR/app/.env"
 BACKEND_PORT="${BACKEND_PORT:-8085}"
 FRONTEND_PORT="${FRONTEND_PORT:-8084}"
 TWIML_ROUTE="/api/kiosk/call/twiml"
@@ -50,7 +50,7 @@ banner() {
 env_val() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'"; }
 
 require_env() {
-    [ -f "$ENV_FILE" ] || fail "Missing $ENV_FILE — copy pointer-fork/.env.example and configure it."
+    [ -f "$ENV_FILE" ] || fail "Missing $ENV_FILE — copy app/.env.example and configure it."
     TWILIO_ACCOUNT_SID="$(env_val TWILIO_ACCOUNT_SID)"
     TWILIO_AUTH_TOKEN="$(env_val TWILIO_AUTH_TOKEN)"
     TWIML_APP_SID="$(env_val TWILIO_TWIML_APP_SID)"
@@ -213,7 +213,7 @@ cmd_ngrok() {
         ok "URL unchanged — backend restart not needed"
     else
         note "URL changed — restarting backend..."
-        docker compose restart pointer-backend >/dev/null 2>&1
+        docker compose restart talkbox-backend >/dev/null 2>&1
         wait_for_health
     fi
     summary_box
@@ -223,7 +223,7 @@ cmd_status() {
     cd "$REPO_DIR"
     banner
     echo -e "${BOLD}Containers${NC}"
-    docker ps --filter "name=pointer-" --format "  {{.Names}}\t{{.Status}}" || true
+    docker ps --filter "name=talkbox-" --format "  {{.Names}}\t{{.Status}}" || true
     echo ""
     echo -e "${BOLD}Health${NC}"
     if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
@@ -269,7 +269,7 @@ cmd_restart() {
 
 cmd_logs() {
     cd "$REPO_DIR"
-    docker logs -f --tail 100 "${1:-pointer-backend}"
+    docker logs -f --tail 100 "${1:-talkbox-backend}"
 }
 
 cmd_install() {
@@ -294,7 +294,7 @@ usage() {
     echo -e "  ${BOLD}talkbox ngrok${NC}     refresh tunnel + publish to Twilio  (--new = new URL)"
     echo -e "  ${BOLD}talkbox status${NC}    containers, health, tunnel, Twilio sync"
     echo -e "  ${BOLD}talkbox restart${NC}   restart containers (no rebuild)"
-    echo -e "  ${BOLD}talkbox logs${NC}      tail backend logs  (talkbox logs pointer-frontend)"
+    echo -e "  ${BOLD}talkbox logs${NC}      tail backend logs  (talkbox logs talkbox-frontend)"
     echo -e "  ${BOLD}talkbox install${NC}   put 'talkbox' on your PATH"
     echo ""
 }

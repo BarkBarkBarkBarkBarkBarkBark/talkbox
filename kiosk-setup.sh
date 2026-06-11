@@ -19,7 +19,7 @@ warn() { echo -e "${YELLOW}[kiosk]${NC} $*"; }
 KIOSK_URL="${KIOSK_URL:-http://localhost:8084/kiosk}"
 KIOSK_USER="${SUDO_USER:-${USER}}"
 
-info "Setting up Pointer kiosk display for user: $KIOSK_USER"
+info "Setting up Talk Box kiosk display for user: $KIOSK_USER"
 
 # ── 1. Install display dependencies ─────────────────────────────────────────
 info "Installing display packages..."
@@ -140,7 +140,7 @@ sudo tee /var/www/loading/index.html >/dev/null <<'EOF'
 </head>
 <body>
   <div class="spinner"></div>
-  <p>Starting Pointer Kiosk...</p>
+  <p>Starting Talk Box Kiosk...</p>
   <script>
     // Poll until the backend is up, then redirect
     (function poll() {

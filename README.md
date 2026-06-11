@@ -31,28 +31,28 @@ dialing `2-1-1` on the kiosk routes to `+1 (916) 498-1000`
 | Path | What it is |
 | --- | --- |
 | [`talkbox`](talkbox) | The CLI. `talkbox update` = git pull → rebuild → relaunch → ngrok → Twilio publish → health check. |
-| [`pointer-fork/`](pointer-fork/) | The app: FastAPI backend, React kiosk frontend, nginx, pgvector Postgres, Docker Compose. |
-| [`pointer-fork/backend/`](pointer-fork/backend/) | Python 3.13 / FastAPI / SQLAlchemy / LangChain. Seeds the agency DB + embeddings on first boot. |
-| [`pointer-fork/frontend/`](pointer-fork/frontend/) | React 19 + Vite + Tailwind. Routes: `/kiosk` (real calls), `/demo` (simulated), `/` (desktop chat). |
+| [`app/`](app/) | The app: FastAPI backend, React kiosk frontend, nginx, pgvector Postgres, Docker Compose. |
+| [`app/backend/`](app/backend/) | Python 3.13 / FastAPI / SQLAlchemy / LangChain. Seeds the agency DB + embeddings on first boot. |
+| [`app/frontend/`](app/frontend/) | React 19 + Vite + Tailwind. Routes: `/kiosk` (real calls), `/demo` (simulated), `/` (desktop chat). |
 | [`Datasets/`](Datasets/) | Reference datasets and data-source documentation. |
 | [`install.sh`](install.sh) | One-shot Pi installer (Docker, repo, `.env`, build, health). |
 | [`kiosk-setup.sh`](kiosk-setup.sh) | Turns the Pi into a fullscreen Chromium kiosk on boot. |
 | [`ngrok-update.sh`](ngrok-update.sh) | Thin systemd wrapper around `talkbox ngrok` (re-syncs the tunnel at boot). |
-| [`agent-context.yaml`](agent-context.yaml), [`pointer_kiosk_roadmap.yaml`](pointer_kiosk_roadmap.yaml) | Machine-readable project context and roadmap for AI agents. |
+| [`agent-context.yaml`](agent-context.yaml), [`kiosk-roadmap.yaml`](kiosk-roadmap.yaml) | Machine-readable project context and roadmap for AI agents (historical, pre-rename). |
 
 ## Agent crib sheet (key files)
 
 | Concern | File |
 | --- | --- |
-| Kiosk state machine (screens, keypad vocabulary, DTMF) | `pointer-fork/frontend/src/hooks/useKioskStateMachine.js` |
-| Twilio Voice SDK hook (token → connect → sendDigits) | `pointer-fork/frontend/src/hooks/useKioskVoiceCall.js` |
-| Screen router / shell | `pointer-fork/frontend/src/components/kiosk/KioskShell.jsx` |
-| Kiosk HTTP API (`/api/kiosk/*`: query, token, TwiML webhook) | `pointer-fork/backend/src/presentation/kiosk_routes.py` |
-| Call allowlist + 211 short-code mapping | `pointer-fork/backend/src/application/services/kiosk_call_service.py` |
-| Twilio access tokens + TwiML generation | `pointer-fork/backend/src/infrastructure/voice/twilio_voice_service.py` |
-| Semantic search / results / 211 fallback | `pointer-fork/backend/src/application/services/kiosk_query_service.py` |
-| nginx (API proxy, mic Permissions-Policy) | `pointer-fork/nginx/default.conf` |
-| All settings | `pointer-fork/.env.example` (copy to `pointer-fork/.env`) |
+| Kiosk state machine (screens, keypad vocabulary, DTMF) | `app/frontend/src/hooks/useKioskStateMachine.js` |
+| Twilio Voice SDK hook (token → connect → sendDigits) | `app/frontend/src/hooks/useKioskVoiceCall.js` |
+| Screen router / shell | `app/frontend/src/components/kiosk/KioskShell.jsx` |
+| Kiosk HTTP API (`/api/kiosk/*`: query, token, TwiML webhook) | `app/backend/src/presentation/kiosk_routes.py` |
+| Call allowlist + 211 short-code mapping | `app/backend/src/application/services/kiosk_call_service.py` |
+| Twilio access tokens + TwiML generation | `app/backend/src/infrastructure/voice/twilio_voice_service.py` |
+| Semantic search / results / 211 fallback | `app/backend/src/application/services/kiosk_query_service.py` |
+| nginx (API proxy, mic Permissions-Policy) | `app/nginx/default.conf` |
+| All settings | `app/.env.example` (copy to `app/.env`) |
 
 ### How a call works
 
@@ -66,10 +66,13 @@ flowchart LR
   Connect -. "keypad → DTMF during call" .-> Twilio
 ```
 
-The keypad vocabulary is `1-9`, `0`, `*`, `#`. Outside a call: `0` = back,
-`*` = repeat aloud, `#` = select. **During a live call every key is sent as a
-DTMF tone** (so "press 0 for an operator" works); hanging up is only the red
-End Call button.
+The keypad vocabulary is `1-9`, `0`, `*`, `#`, plus two dedicated buttons:
+**`CALL`** (green) and **`HANGUP`** (red), always visible in the footer —
+touch targets today, mappable to physical GPIO/HID buttons later (keyboard
+aliases: `C` / `H`). Outside a call: `0` = back, `*` = repeat aloud,
+`#` = select, `CALL` = context-aware (confirm call / dial / Call 211 from
+home). **During a live call every keypad key is sent as a DTMF tone** (so
+"press 0 for an operator" works); only `HANGUP` ends the call.
 
 ## The `talkbox` CLI
 
@@ -96,7 +99,7 @@ git clone https://github.com/BarkBarkBarkBarkBarkBarkBark/talkbox.git
 cd talkbox
 
 # 1. Configure
-cp pointer-fork/.env.example pointer-fork/.env
+cp app/.env.example app/.env
 #    Minimum: POSTGRES_PASSWORD, DB_URI (same password), OPENAI_API_KEY
 #    For real calls: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER,
 #                    TWILIO_TWIML_APP_SID, KIOSK_CALLING_ENABLED=true
@@ -111,7 +114,7 @@ cp pointer-fork/.env.example pointer-fork/.env
 ```
 
 First boot seeds Postgres with the agency database
-(`pointer-fork/backend/src/infrastructure/seeds/agencies_master.csv`) and
+(`app/backend/src/infrastructure/seeds/agencies_master.csv`) and
 category embeddings.
 
 ### Smoke test
@@ -155,18 +158,18 @@ bash ~/talkbox/kiosk-setup.sh       # fullscreen Chromium kiosk on boot
 ```
 
 Ports bind to loopback by default. To expose the kiosk on your LAN, change
-`127.0.0.1:8084:80` to `8084:80` in `pointer-fork/docker-compose.yml`
+`127.0.0.1:8084:80` to `8084:80` in `app/docker-compose.yml`
 (keep the backend on loopback — nginx proxies `/api`).
 
 ## Development (without Docker)
 
 ```bash
 # Backend (uses uv)
-cd pointer-fork/backend
+cd app/backend
 uv sync && uv run python main.py api
 
 # Frontend
-cd pointer-fork/frontend
+cd app/frontend
 npm install && npm run dev    # Vite proxies /api to 127.0.0.1:8085
 ```
 
@@ -181,16 +184,16 @@ npm install && npm run dev    # Vite proxies /api to 127.0.0.1:8085
   `kiosk_routes.py`): a backend restart between token issue and Twilio's
   webhook drops the call, and multiple uvicorn workers would break it. Fine
   at single-worker kiosk scale; move to Redis/Postgres if scaling out.
-- **TwiML webhook is unauthenticated**: it only dials for a valid pending
-  identity UUID, so abuse is limited, but X-Twilio-Signature validation is
-  the right hardening step.
+- **TwiML webhook auth depends on `TWILIO_PUBLIC_URL`**: X-Twilio-Signature
+  is validated against that URL, so if the tunnel URL in `.env` is stale the
+  webhook returns 403. `talkbox update` / `talkbox ngrok` keep it in sync.
 - **`docker compose pull` is a trap**: images are tagged
-  `ghcr.io/la-plas-growth/pointer-*:latest` but built locally. Pulling could
+  `ghcr.io/la-plas-growth/talkbox-*:latest` but built locally. Pulling could
   clobber local builds with stale registry images. Always use
   `talkbox update` (it builds, never pulls).
 - **nginx `add_header` inheritance**: any `add_header` inside a `location`
   block silently drops all server-level headers — that's why the security
   headers are repeated inside `location /` in `nginx/default.conf`.
-- **Hang-up requires the touchscreen**: during a live call every keypad key
-  is DTMF by design, so a keypad-only build needs a dedicated physical
-  hang-up key wired to the End Call action.
+- **Physical buttons not wired yet**: the green/red footer buttons emit the
+  `CALL` / `HANGUP` key vocabulary (keyboard `C` / `H`), so a GPIO or HID
+  button pair just needs to emit those keys — no UI changes required.
