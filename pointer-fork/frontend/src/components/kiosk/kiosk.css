@@ -90,6 +90,83 @@
   color: hsl(var(--primary-foreground));
 }
 
+/* ───── Hero "Call 211" button (the kiosk's headline action) ───── */
+.kiosk-hero-211 {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.6rem, 2.5vw, 1.25rem);
+  width: 100%;
+  padding: clamp(0.8rem, 3vh, 1.5rem) clamp(0.9rem, 3vw, 1.75rem);
+  margin-bottom: clamp(0.6rem, 2.2vh, 1.1rem);
+  border: 3px solid hsl(var(--success));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--success));
+  color: hsl(var(--success-foreground));
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 16px hsl(var(--success) / 0.35);
+  transition: filter 0.12s ease, transform 0.08s ease;
+}
+
+.kiosk-hero-211:hover,
+.kiosk-hero-211:focus-visible {
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.kiosk-hero-211:active {
+  transform: scale(0.99);
+}
+
+.kiosk-hero-211-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: clamp(2.6rem, 8vh, 3.8rem);
+  height: clamp(2.6rem, 8vh, 3.8rem);
+  border-radius: 9999px;
+  background: hsl(var(--success-foreground) / 0.2);
+  font-size: clamp(1.2rem, 3.4vh, 1.8rem);
+}
+
+.kiosk-hero-211-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.kiosk-hero-211-title {
+  font-size: clamp(1.25rem, 4vh, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.kiosk-hero-211-sub {
+  font-size: clamp(0.85rem, 2.2vh, 1.1rem);
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.kiosk-hero-211-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: clamp(2rem, 6vh, 3rem);
+  height: clamp(2rem, 6vh, 3rem);
+  border-radius: 9999px;
+  background: hsl(var(--success-foreground) / 0.2);
+  font-size: clamp(1rem, 3vh, 1.5rem);
+  font-weight: 700;
+}
+
+.kiosk-ask-or {
+  margin-bottom: clamp(0.4rem, 1.5vh, 0.75rem);
+}
+
 /* ───── Chat-first ask surface ───── */
 .kiosk-ask-form {
   display: flex;
@@ -239,6 +316,11 @@
 .kiosk-dial-delete,
 .kiosk-dial-clear {
   width: 100%;
+}
+
+.kiosk-dial-call {
+  width: 100%;
+  min-width: 0;
 }
 
 .kiosk-dial-display {
@@ -467,8 +549,13 @@
   transition: filter 0.12s ease, border-color 0.12s ease;
 }
 
-.kiosk-action:hover {
+.kiosk-action:hover:not(:disabled) {
   filter: brightness(1.05);
+}
+
+.kiosk-action:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .kiosk-action .k {
@@ -576,18 +663,6 @@
 .kiosk-keypad button:active {
   background: hsl(var(--secondary));
   border-color: hsl(var(--primary));
-}
-
-.kiosk-keypad button.call {
-  background: hsl(var(--success));
-  color: hsl(var(--success-foreground));
-  border-color: hsl(var(--success));
-}
-
-.kiosk-keypad button.back {
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
-  border-color: hsl(var(--destructive));
 }
 
 .kiosk-spinner {

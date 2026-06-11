@@ -178,7 +178,11 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
     Twilio will then POST to /api/kiosk/call/twiml to get dial instructions.
     """
     from fastapi import HTTPException
-    from src.application.services.kiosk_call_service import normalize_digits, to_e164
+    from src.application.services.kiosk_call_service import (
+        expand_short_code,
+        normalize_digits,
+        to_e164,
+    )
 
     if not _voice_service.browser_calling_configured:
         raise HTTPException(
@@ -187,7 +191,7 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
         )
 
     phone_raw = payload.phone.strip()
-    digits = normalize_digits(phone_raw)
+    digits = expand_short_code(normalize_digits(phone_raw))
     # Prefer E.164 pass-through for international numbers already starting with '+'
     if phone_raw.startswith("+"):
         e164 = f"+{digits}"

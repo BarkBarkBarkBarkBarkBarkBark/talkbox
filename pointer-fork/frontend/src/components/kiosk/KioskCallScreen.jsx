@@ -60,6 +60,11 @@ export function KioskCallActive({ item, status, simulated, reason, onKey, onHang
         {simulated ? (
           <p className="kiosk-subtitle">This is a demonstration. No real call is placed.</p>
         ) : null}
+        {isLive ? (
+          <p className="kiosk-subtitle" style={{ fontSize: "clamp(0.8rem,1.8vh,0.95rem)", opacity: 0.7 }}>
+            Use the keypad to answer phone menus — for example “press 0 for an operator”.
+          </p>
+        ) : null}
         <div className="kiosk-actions">
           <button
             type="button"

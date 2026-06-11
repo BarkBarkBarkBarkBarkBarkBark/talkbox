@@ -31,8 +31,18 @@ export default function KioskShell({ demo = false }) {
   // /demo always simulates; /kiosk places real (allowlisted) calls when the
   // backend reports calling_enabled.
   const machine = useKioskStateMachine({ fakeCall: demo });
-  const { state, handleKey, setQuery, setTab, selectMenuEntry, runQuery, dialDelete, dialClear } =
-    machine;
+  const {
+    state,
+    handleKey,
+    setQuery,
+    setTab,
+    selectMenuEntry,
+    runQuery,
+    dialDelete,
+    dialClear,
+    dialCall,
+    hangUp,
+  } = machine;
   const [clock, setClock] = useState("");
 
   useKeypadInput(handleKey, { enabled: true });
@@ -62,6 +72,7 @@ export default function KioskShell({ demo = false }) {
             <KioskDialPad
               number={state.dialNumber}
               onKey={handleKey}
+              onCall={dialCall}
               onDelete={dialDelete}
               onClear={dialClear}
             />

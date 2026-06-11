@@ -6,7 +6,7 @@ import { kioskApi } from "../lib/kioskApi.js";
 //   idle | requesting | connecting | ringing | in-progress | ended | failed
 export function useKioskVoiceCall({ onStatus }) {
   const deviceRef = useRef(null);
-  const connectionRef = useRef(null);
+  const callRef = useRef(null);
   const [status, setStatus] = useState("idle");
 
   const updateStatus = useCallback(
@@ -17,15 +17,19 @@ export function useKioskVoiceCall({ onStatus }) {
     [onStatus],
   );
 
-  // Tear down device on unmount
-  useEffect(() => {
-    return () => {
-      try {
-        deviceRef.current?.destroy();
-      } catch (_) {}
-      deviceRef.current = null;
-    };
+  const teardown = useCallback(() => {
+    try {
+      callRef.current?.disconnect();
+    } catch (_) {}
+    try {
+      deviceRef.current?.destroy();
+    } catch (_) {}
+    callRef.current = null;
+    deviceRef.current = null;
   }, []);
+
+  // Tear down device on unmount
+  useEffect(() => teardown, [teardown]);
 
   const startCall = useCallback(
     async (phone, name) => {
@@ -44,10 +48,8 @@ export function useKioskVoiceCall({ onStatus }) {
         return;
       }
 
-      // Tear down any previous device
-      try {
-        deviceRef.current?.destroy();
-      } catch (_) {}
+      // Tear down any previous device/call
+      teardown();
 
       updateStatus("connecting");
 
@@ -63,55 +65,52 @@ export function useKioskVoiceCall({ onStatus }) {
         return;
       }
 
-      // Device ready → connect
-      device.on("ready", () => {
-        try {
-          const conn = device.connect({ params: { identity: tokenData.identity } });
-          connectionRef.current = conn;
-
-          conn.on("ringing", () => updateStatus("ringing"));
-          conn.on("accept", () => updateStatus("in-progress"));
-          conn.on("disconnect", () => {
-            updateStatus("ended");
-            device.destroy();
-            deviceRef.current = null;
-          });
-          conn.on("error", (err) => {
-            updateStatus("failed", err?.message || "Call error.");
-            device.destroy();
-            deviceRef.current = null;
-          });
-        } catch (err) {
-          updateStatus("failed", "Could not connect the call.");
-        }
-      });
-
       device.on("error", (err) => {
         updateStatus("failed", err?.message || "Device error.");
       });
 
-      // Register the device (required before connect in SDK v2)
+      // Voice SDK v2: outgoing calls connect directly — no registration needed
+      // (registration is only required to *receive* calls). connect() resolves
+      // to a Call object once media setup (incl. mic permission) succeeds.
+      let call;
       try {
-        await device.register();
+        call = await device.connect({ params: { identity: tokenData.identity } });
       } catch (err) {
-        updateStatus("failed", "Could not reach the voice service.");
+        const message = String(err?.message || "");
+        const reason = /permission|denied|notallowed/i.test(message)
+          ? "Microphone access was blocked. Please allow the microphone."
+          : "Could not connect the call.";
+        updateStatus("failed", reason);
+        teardown();
         return;
       }
+      callRef.current = call;
+
+      call.on("ringing", () => updateStatus("ringing"));
+      call.on("accept", () => updateStatus("in-progress"));
+      call.on("disconnect", () => {
+        updateStatus("ended");
+        teardown();
+      });
+      call.on("error", (err) => {
+        updateStatus("failed", err?.message || "Call error.");
+        teardown();
+      });
     },
-    [updateStatus],
+    [teardown, updateStatus],
   );
 
-  const hangUp = useCallback(() => {
+  // Send DTMF tones to the far end (IVR menus, extensions, etc).
+  const sendDigits = useCallback((digits) => {
     try {
-      connectionRef.current?.disconnect();
+      callRef.current?.sendDigits(String(digits));
     } catch (_) {}
-    try {
-      deviceRef.current?.destroy();
-    } catch (_) {}
-    deviceRef.current = null;
-    connectionRef.current = null;
-    updateStatus("ended");
-  }, [updateStatus]);
+  }, []);
 
-  return { status, startCall, hangUp };
+  const hangUp = useCallback(() => {
+    teardown();
+    updateStatus("ended");
+  }, [teardown, updateStatus]);
+
+  return { status, startCall, hangUp, sendDigits };
 }

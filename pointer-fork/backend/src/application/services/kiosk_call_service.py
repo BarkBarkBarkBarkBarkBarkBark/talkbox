@@ -29,6 +29,24 @@ def normalize_digits(raw: str | None) -> str:
     return re.sub(r"\D", "", str(raw or ""))
 
 
+# Short dialing codes mapped to real numbers. Twilio cannot dial "211"
+# directly, so 2-1-1 routes to 211 Sacramento's national access line.
+SHORT_CODE_MAP = {
+    "211": "19164981000",
+}
+
+# Numbers always allowed regardless of the agencies database (last 10 digits).
+BUILTIN_ALLOWLIST = {
+    "9164981000": "211 Sacramento — Community Resource Line",
+    "8445461464": "211 Community Resource Line (toll-free)",
+}
+
+
+def expand_short_code(digits: str) -> str:
+    """Translate short dialing codes (e.g. '211') into full digit strings."""
+    return SHORT_CODE_MAP.get(digits, digits)
+
+
 def _test_numbers_last10() -> list[str]:
     """Parse KIOSK_TEST_CALL_NUMBERS (comma-separated) into last-10-digit strings."""
     raw = settings.kiosk_test_call_numbers or ""
@@ -64,9 +82,13 @@ class KioskCallService:
         Matches on the last 10 digits so '9164476243', '19164476243' and
         formatted variants in the CSV all line up.
         """
+        digits = expand_short_code(digits)
         if len(digits) < 7:
             return None
         last10 = digits[-10:]
+
+        if last10 in BUILTIN_ALLOWLIST:
+            return BUILTIN_ALLOWLIST[last10]
 
         if last10 in _test_numbers_last10():
             return "Test number (KIOSK_TEST_CALL_NUMBERS)"
@@ -95,7 +117,7 @@ class KioskCallService:
 
     # ─── Calling ─────────────────────────────────────────────────────────
     def start_call(self, raw_phone: str) -> dict:
-        digits = normalize_digits(raw_phone)
+        digits = expand_short_code(normalize_digits(raw_phone))
         e164 = to_e164(digits)
 
         if not e164:

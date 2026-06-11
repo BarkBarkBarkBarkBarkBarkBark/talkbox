@@ -140,7 +140,7 @@ function describeScreen(state) {
       if (state.tab === TABS.BROWSE)
         return "Browse menu. Press a number to choose a category, or press zero to go back to asking.";
       if (state.tab === TABS.DIAL)
-        return "Dial pad. Enter a phone number with the keypad, then press the hash key to call.";
+        return "Dial pad. Enter a phone number with the keypad, then press the green Call button or the hash key to call.";
       return "Tell us what you need. Type or speak, then press the hash key to search.";
     case SCREENS.RESULTS_LIST:
       return state.spokenSummary || "Here are your results. Press a number to choose one.";
@@ -150,9 +150,9 @@ function describeScreen(state) {
       return `${s.name}. ${s.description || ""} Press the hash key to call, or zero to go back.`;
     }
     case SCREENS.CALL_CONFIRM:
-      return `Call ${state.selected?.name || "this resource"}? Press hash to confirm, or zero to cancel.`;
+      return `Call ${state.selected?.name || "this resource"}? Press the green Call button or hash to confirm, or zero to cancel.`;
     case SCREENS.CALL_ACTIVE:
-      return "Call in progress. Press the red End Call button to hang up.";
+      return "Call in progress. Use the keypad to answer phone menus. Press the red End Call button to hang up.";
     case SCREENS.EMPTY:
       return state.spokenSummary || "No match found. You can call 211 for help.";
     case SCREENS.ERROR:
@@ -284,11 +284,11 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       } else if (entry.action === "CALL_211") {
         const item = stateRef.current.fallback || {
           name: "211 help line",
-          phone: "211",
-          phone_display: "211",
+          phone: "+19164981000",
+          phone_display: "211 (help line)",
         };
         dispatch({ type: "CALL_CONFIRM", item });
-        announce("Call the 211 help line? Press hash to confirm, or zero to cancel.");
+        announce("Call the 211 help line? Press the green Call button or hash to confirm.");
       }
     },
     [announce, armIdleTimer, runQuery],
@@ -375,11 +375,13 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           dispatch({ type: "DIAL_DELETE" });
           return;
         }
+        if (s.screen === SCREENS.CALL_ACTIVE) return; // never hang up / DTMF via backspace
         key = "0";
       }
 
-      // * = repeat / help on every screen.
-      if (key === "*") {
+      // * = repeat / help on every screen — except during an active call,
+      // where it must reach the far end as a DTMF tone.
+      if (key === "*" && s.screen !== SCREENS.CALL_ACTIVE) {
         announce(describeScreen(s));
         return;
       }
@@ -464,9 +466,19 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
 
         case SCREENS.CALL_ACTIVE: {
-          // Keypad digits during an active call are intentionally swallowed —
-          // the user may need to dial 0 on the remote IVR. Hang-up is only
-          // triggered by the explicit End Call button (onHangUp prop).
+          // During a live call every keypad press (including 0, * and #) is
+          // forwarded to the far end as a DTMF tone so users can navigate IVR
+          // menus and extensions. Hang-up is only triggered by the explicit
+          // red End Call button (onHangUp prop), never by a keypad key.
+          const live =
+            !s.callSimulated && (s.callStatus === "connected" || s.callStatus === "in-progress");
+          if (live) {
+            if (/^[0-9*#]$/.test(key)) voiceCall.sendDigits(key);
+            return;
+          }
+          // Not live (simulated, still connecting, failed, or ended): 0 backs
+          // out — cancelling a connecting call or leaving a failure screen.
+          if (key === "0") hangUp();
           return;
         }
 
