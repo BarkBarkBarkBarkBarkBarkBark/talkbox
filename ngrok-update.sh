@@ -189,14 +189,21 @@ fi
 TWIML_WEBHOOK="${NGROK_URL}${TWIML_ROUTE}"
 log "TwiML webhook URL: $TWIML_WEBHOOK"
 
-# ── 4. Update Twilio TwiML App via CLI ────────────────────────────────────────
+# ── 4. Update Twilio TwiML App via REST API ───────────────────────────────────
 log "Updating Twilio TwiML App $TWIML_APP_SID..."
-twilio api:core:applications:update \
-    --sid "$TWIML_APP_SID" \
-    --voice-url "$TWIML_WEBHOOK" \
-    --voice-method POST \
-    2>&1 | tee -a "$LOG_FILE"
-log "Twilio TwiML App updated."
+HTTP_STATUS=$(curl -s -o /tmp/twilio_response.json -w "%{http_code}" \
+    -X POST "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Applications/${TWIML_APP_SID}.json" \
+    -u "${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}" \
+    --data-urlencode "VoiceUrl=${TWIML_WEBHOOK}" \
+    --data-urlencode "VoiceMethod=POST")
+
+if [ "$HTTP_STATUS" = "200" ]; then
+    log "Twilio TwiML App updated successfully (HTTP 200)."
+else
+    log "ERROR: Twilio API returned HTTP $HTTP_STATUS:"
+    cat /tmp/twilio_response.json | tee -a "$LOG_FILE"
+    exit 1
+fi
 
 # ── 5. Rewrite TWILIO_PUBLIC_URL in .env ──────────────────────────────────────
 if [ -f "$ENV_FILE" ]; then
