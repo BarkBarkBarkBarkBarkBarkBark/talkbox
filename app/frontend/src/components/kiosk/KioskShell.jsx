@@ -85,6 +85,10 @@ export default function KioskShell({ demo = false }) {
             onChange={setQuery}
             onSubmit={() => runQuery(state.query)}
             onMenuEntry={selectMenuEntry}
+            voiceStatus={state.voiceStatus}
+            voiceError={state.voiceError}
+            lastTranscript={state.lastTranscript}
+            speechEnabled={state.speechEnabled}
           />
         );
       case SCREENS.LOADING:
@@ -149,7 +153,29 @@ export default function KioskShell({ demo = false }) {
           <SimulatedKeypad onKey={handleKey} />
         </div>
       ) : null}
-      <KioskFooterCommands onKey={handleKey} />
+      <KioskFooterCommands onKey={handleKey} hints={footerHints(state)} />
     </div>
   );
+}
+
+function footerHints(state) {
+  if (state.screen === SCREENS.CALL_ACTIVE) {
+    return [
+      { key: "0", label: "Phone menu key" },
+      { key: "*", label: "Phone menu key" },
+      { key: "#", label: "Phone menu key" },
+    ];
+  }
+  if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.ASK) {
+    return [
+      { key: "0", label: "Clear / Home" },
+      { key: "*", label: "Speak" },
+      { key: "#", label: "Search" },
+    ];
+  }
+  return [
+    { key: "0", label: "Back / Home" },
+    { key: "*", label: "Repeat / Help" },
+    { key: "#", label: "Select" },
+  ];
 }

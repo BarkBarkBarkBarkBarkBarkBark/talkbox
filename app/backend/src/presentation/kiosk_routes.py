@@ -11,11 +11,12 @@ import threading
 import time
 import uuid
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from src.application.services.kiosk_call_service import KioskCallService
 from src.application.services.kiosk_query_service import KioskQueryService
+from src.application.services.kiosk_stt_service import KioskSttError, KioskSttService
 from src.infrastructure.config import settings
 from src.infrastructure.voice.twilio_voice_service import TwilioVoiceService
 from src.presentation.routes import query_handler
@@ -27,6 +28,7 @@ router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 _voice_service = TwilioVoiceService()
 kiosk_query_service = KioskQueryService(query_handler)
 kiosk_call_service = KioskCallService(_voice_service)
+kiosk_stt_service = KioskSttService()
 
 # ─── Pending browser-SDK calls ───────────────────────────────────────────────
 # Maps identity (UUID str) → {"to": e164, "expires": epoch_float}
@@ -45,7 +47,9 @@ def _prune_pending() -> None:
 
 
 def _schedule_prune() -> None:
-    threading.Timer(120, lambda: (_prune_pending(), _schedule_prune())).start()
+    timer = threading.Timer(120, lambda: (_prune_pending(), _schedule_prune()))
+    timer.daemon = True
+    timer.start()
 
 
 _schedule_prune()
@@ -87,6 +91,8 @@ class KioskConfigResponse(BaseModel):
     mock_mode: bool
     idle_reset_seconds: int
     calling_enabled: bool
+    speech_enabled: bool
+    speech_max_seconds: int
     menu: list[KioskMenuItem]
 
 
@@ -120,6 +126,14 @@ class KioskVoiceTokenResponse(BaseModel):
     agency: str
 
 
+class KioskSpeechResponse(BaseModel):
+    text: str
+    provider: str
+    duration_ms: int
+    fallback_used: bool = False
+    error: str | None = None
+
+
 # Home menu — 1-9 number keys map to a quick category query or action.
 _HOME_MENU: list[dict] = [
     {"key": 1, "action": "QUICK_QUERY", "label": "Shelter", "query": "I need shelter tonight"},
@@ -144,6 +158,8 @@ def kiosk_config() -> KioskConfigResponse:
         # True only when KIOSK_CALLING_ENABLED=true and Twilio creds are set.
         # Even then, the backend dials allowlisted (database) numbers only.
         calling_enabled=kiosk_call_service.calling_enabled,
+        speech_enabled=settings.kiosk_stt_enabled,
+        speech_max_seconds=settings.kiosk_stt_max_seconds,
         menu=[KioskMenuItem(**m) for m in _HOME_MENU],
     )
 
@@ -159,6 +175,25 @@ def kiosk_query(payload: KioskQueryRequest) -> KioskQueryResponse:
         result.get("empty"),
     )
     return KioskQueryResponse(**result)
+
+
+@router.post("/speech/transcribe", response_model=KioskSpeechResponse)
+async def kiosk_speech_transcribe(audio: UploadFile = File(...)) -> KioskSpeechResponse:
+    uploaded = await audio.read(settings.kiosk_stt_max_upload_bytes + 1)
+    if len(uploaded) > settings.kiosk_stt_max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Uploaded audio is too large.")
+    try:
+        result = kiosk_stt_service.transcribe(uploaded, audio.filename or "audio.webm")
+    except KioskSttError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    logger.info(
+        "kiosk speech transcribed: provider=%s fallback=%s chars=%d duration_ms=%d",
+        result.provider,
+        result.fallback_used,
+        len(result.text),
+        result.duration_ms,
+    )
+    return KioskSpeechResponse(**result.as_dict())
 
 
 @router.post("/call/start", response_model=KioskCallResponse)

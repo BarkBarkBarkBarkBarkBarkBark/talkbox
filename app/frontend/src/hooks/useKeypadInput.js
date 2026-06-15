@@ -43,8 +43,9 @@ export function useKeypadInput(onKey, { enabled = true } = {}) {
         target &&
         (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 
-      // When typing, let the field handle everything except Escape (always back).
-      if (typing && e.key !== "Escape") return;
+      // When typing, let the field handle text entry. Escape and star remain
+      // kiosk commands so users can back out or start voice search from Ask.
+      if (typing && e.key !== "Escape" && e.key !== "*" && e.key !== "/") return;
 
       const mapped = normalize(e);
       if (!mapped) return;

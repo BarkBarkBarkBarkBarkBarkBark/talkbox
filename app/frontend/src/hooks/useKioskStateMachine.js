@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { kioskApi } from "../lib/kioskApi.js";
 import { cancelSpeech, speak } from "../lib/tts.js";
 import { useKioskVoiceCall } from "./useKioskVoiceCall.js";
+import { useVoiceSearch } from "./useVoiceSearch.js";
 
 // Deterministic kiosk navigation driven entirely by the 12-key vocabulary
 // ("1".."9", "0", "*", "#"). The same machine backs the physical ATM keypad,
@@ -169,6 +170,12 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
   const idleTimer = useRef(null);
   const callTimer = useRef(null);
+
+  const speechEnabled = state.config?.speech_enabled ?? true;
+  const voice = useVoiceSearch({
+    enabled: speechEnabled,
+    maxSeconds: state.config?.speech_max_seconds || 6,
+  });
 
   // ─── Voice SDK hook (real two-way calls) ─────────────────────────────
   const voiceCall = useKioskVoiceCall({
@@ -368,6 +375,25 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
   const setQuery = useCallback((q) => dispatch({ type: "SET_QUERY", query: q }), []);
 
+  const runVoiceSearch = useCallback(async () => {
+    if (!speechEnabled) {
+      announce("Speech search is not available.");
+      return;
+    }
+    cancelSpeech();
+    armIdleTimer();
+    dispatch({ type: "SET_TAB", tab: TABS.ASK });
+    announce("Listening.");
+    const transcript = await voice.startVoiceSearch();
+    if (!transcript) {
+      announce("I couldn't hear that. Press star and try again.");
+      return;
+    }
+    dispatch({ type: "SET_QUERY", query: transcript });
+    announce("Searching.");
+    runQuery(transcript);
+  }, [announce, armIdleTimer, runQuery, speechEnabled, voice]);
+
   // ─── Key dispatch ────────────────────────────────────────────────────
   const handleKey = useCallback(
     (key) => {
@@ -427,8 +453,21 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
       }
 
-      // * = repeat / help on every screen — except during an active call,
-      // where it must reach the far end as a DTMF tone.
+      // * starts one-shot voice search from Ask Home. Everywhere else it
+      // repeats/help-prompts, except during live calls where it is DTMF.
+      if (
+        key === "*" &&
+        s.screen === SCREENS.ASK_HOME &&
+        s.tab === TABS.ASK &&
+        voice.voiceStatus !== "requesting-permission" &&
+        voice.voiceStatus !== "listening" &&
+        voice.voiceStatus !== "transcribing"
+      ) {
+        runVoiceSearch();
+        return;
+      }
+
+      // * = repeat / help on every other non-call screen.
       if (key === "*" && s.screen !== SCREENS.CALL_ACTIVE) {
         announce(describeScreen(s));
         return;
@@ -554,13 +593,30 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
       }
     },
-    [announce, armIdleTimer, dialCall, hangUp, runQuery, selectMenuEntry, startCall],
+    [
+      announce,
+      armIdleTimer,
+      dialCall,
+      hangUp,
+      runQuery,
+      runVoiceSearch,
+      selectMenuEntry,
+      startCall,
+      voice.voiceStatus,
+    ],
   );
 
   return {
-    state,
+    state: {
+      ...state,
+      voiceStatus: voice.voiceStatus,
+      voiceError: voice.voiceError,
+      lastTranscript: voice.lastTranscript,
+      speechEnabled,
+    },
     handleKey,
     runQuery,
+    runVoiceSearch,
     setQuery,
     setTab,
     selectMenuEntry,

@@ -20,6 +20,10 @@ the Twilio SMS webhook are unchanged.
   `ASK_HOME (ask | browse tabs) → RESULTS_LIST → RESOURCE_DETAIL →
   CALL_CONFIRM → CALL_ACTIVE`, plus `EMPTY` / `ERROR`. Inactivity auto-resets
   to the ask screen.
+- **Push-button voice search** — on the Ask tab, `*` records a short request,
+  posts it to `POST /api/kiosk/speech/transcribe`, inserts the transcript into
+  the Ask field, and runs the existing kiosk search. Other screens keep
+  `*` repeat/help behavior; live calls keep `*` as DTMF.
 - **Numbered, structured results** — `POST /api/kiosk/query` routes the query
   with embedding similarity (pgvector) and a plain SQL lookup, then returns
   compact, numbered (1–9), display-safe resources with truncated descriptions
@@ -45,7 +49,7 @@ later milestones (M6/M7); the kiosk **cannot dial a real number** today.
 | ----- | ---------------------------------------- |
 | `1`–`9` | Select the visible menu item / resource (on the ask screen, digits act as category shortcuts while the input is empty) |
 | `0`   | Back / home (clears the input on the ask screen) |
-| `*`   | Repeat / help (reads the screen aloud)   |
+| `*`   | Speak on Ask; repeat / help elsewhere; DTMF during active calls |
 | `#`   | Search / select / confirm call           |
 
 Keyboard aliases for laptop testing: `Enter` = `#`, `Escape`/`Backspace` = `0`,
@@ -96,13 +100,17 @@ npm run dev   # http://localhost:5173/kiosk  (proxies /api to the compose backen
 - The Pi is a thin terminal: a Chromium kiosk pointed at `/kiosk` on the cloud
   (or a local) backend. Autostart, health page, and heartbeat land in M9.
 - Keep `KIOSK_MOCK_QUERY` off in the field; point the device at the real backend.
+- For voice search, install `ffmpeg`, install `whisper.cpp` as
+  `/usr/local/bin/whisper-cli`, and download `ggml-tiny.en-q5_1.bin` once to
+  `/models`. Keep the model outside the normal update path so updates do not
+  redownload it.
 
 ## Baseline reference (verified)
 
 - Backend: FastAPI (`backend/main.py` → `src.presentation.api:app`). Public:
   `GET /api/health`, `POST /api/query`, `POST /api/sms-query`, auth routers.
   Kiosk adds: `GET /api/kiosk/config`, `POST /api/kiosk/query`,
-  `POST /api/kiosk/events`.
+  `POST /api/kiosk/speech/transcribe`, `POST /api/kiosk/events`.
 - Query response shape: `{ markdown, results: { type: "agencies"|"doctors",
   category, items_agencies[], items_doctors[] } }`.
 - Frontend: React 19 + Vite 6 + Tailwind 4. Router in `frontend/src/main.jsx`.

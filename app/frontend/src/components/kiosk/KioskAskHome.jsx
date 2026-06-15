@@ -10,13 +10,32 @@ const PhoneIcon = () => (
 // headline action — a big green button anyone can hit without typing. The
 // open-ended input and numbered category chips sit beneath it for people who
 // want to find a specific organisation instead.
-export default function KioskAskHome({ query, menu, onChange, onSubmit, onMenuEntry }) {
+export default function KioskAskHome({
+  query,
+  menu,
+  onChange,
+  onSubmit,
+  onMenuEntry,
+  voiceStatus = "idle",
+  voiceError = null,
+  lastTranscript = "",
+  speechEnabled = true,
+}) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current?.focus();
   }, []);
 
   const canSubmit = Boolean(query.trim());
+  const voiceMessage = (() => {
+    if (!speechEnabled) return "Speech search is unavailable.";
+    if (voiceStatus === "requesting-permission") return "Allow microphone access.";
+    if (voiceStatus === "listening") return "Listening... speak now.";
+    if (voiceStatus === "transcribing") return "Transcribing...";
+    if (voiceStatus === "error") return voiceError || "Couldn't hear that. Press * and try again.";
+    if (lastTranscript) return `I heard: ${lastTranscript}`;
+    return "Press * to speak.";
+  })();
   // VOICE_INPUT is redundant here (the input is right there) and CALL_211 is
   // promoted to the hero button above.
   const chips = (menu || []).filter(
@@ -51,6 +70,14 @@ export default function KioskAskHome({ query, menu, onChange, onSubmit, onMenuEn
       <p className="kiosk-subtitle kiosk-ask-or">
         Or search for a specific organisation — for example “I need a shelter for tonight”.
       </p>
+
+      <div
+        className={`kiosk-voice-banner ${voiceStatus === "listening" ? "kiosk-pulse" : ""}`}
+        aria-live="polite"
+      >
+        <span className="k">*</span>
+        <span>{voiceMessage}</span>
+      </div>
 
       <form
         className="kiosk-ask-form"

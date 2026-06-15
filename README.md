@@ -45,6 +45,7 @@ dialing `2-1-1` on the kiosk routes to `+1 (916) 498-1000`
 | Concern | File |
 | --- | --- |
 | Kiosk state machine (screens, keypad vocabulary, DTMF) | `app/frontend/src/hooks/useKioskStateMachine.js` |
+| Kiosk voice search (`*` on Ask screen) | `app/frontend/src/hooks/useVoiceSearch.js`, `app/backend/src/application/services/kiosk_stt_service.py` |
 | Twilio Voice SDK hook (token → connect → sendDigits) | `app/frontend/src/hooks/useKioskVoiceCall.js` |
 | Screen router / shell | `app/frontend/src/components/kiosk/KioskShell.jsx` |
 | Kiosk HTTP API (`/api/kiosk/*`: query, token, TwiML webhook) | `app/backend/src/presentation/kiosk_routes.py` |
@@ -71,7 +72,9 @@ The keypad vocabulary is `1-9`, `0`, `*`, `#`, plus two dedicated buttons:
 touch targets today, mappable to physical GPIO/HID buttons later (keyboard
 aliases: `C` / `H`). Outside a call: `0` = back, `*` = repeat aloud,
 `#` = select, `CALL` = context-aware (confirm call / dial / Call 211 from
-home). **During a live call every keypad key is sent as a DTMF tone** (so
+home). On the Ask screen, `*` starts one-shot voice search: record a short
+request, transcribe it, and run the normal semantic search. **During a live call
+every keypad key is sent as a DTMF tone** (so
 "press 0 for an operator" works); only `HANGUP` ends the call.
 
 ## The `talkbox` CLI
@@ -146,6 +149,30 @@ nginx ships `Permissions-Policy: microphone=(self)` for this.
 One-time Twilio setup: create a TwiML App (Console → Voice → TwiML Apps),
 put its SID in `TWILIO_TWIML_APP_SID`, and set `TWILIO_PUBLIC_URL` in `.env`
 to your stable public host URL.
+
+## Voice search (`*` on Ask)
+
+The kiosk can do local-first, push-button speech search. On the Ask tab, press
+`*`, speak for up to `KIOSK_STT_MAX_SECONDS`, and the frontend posts microphone
+audio to `POST /api/kiosk/speech/transcribe`. The backend converts the browser
+audio with `ffmpeg`, runs `whisper.cpp`, inserts the transcript into the Ask
+field, and then uses the existing `/api/kiosk/query` search path.
+
+Configure it in `app/.env`:
+
+```bash
+KIOSK_STT_ENABLED=true
+KIOSK_STT_PROVIDER=local        # local | openai | auto
+KIOSK_STT_WHISPER_BIN=/usr/local/bin/whisper-cli
+KIOSK_STT_MODEL_PATH=/models/ggml-tiny.en-q5_1.bin
+KIOSK_STT_MAX_SECONDS=6
+```
+
+For a Pi install, install `ffmpeg`, build or install `whisper.cpp`, download a
+quantized tiny English model once, and mount/copy it to the configured model
+path. Do not redownload the model during normal `talkbox update` runs. The
+backend image includes `ffmpeg`; the `whisper.cpp` binary and model are expected
+at the configured paths unless you bake them into a custom image.
 
 ## Deploying to a Raspberry Pi
 

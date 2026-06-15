@@ -38,7 +38,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache curl libpq
+RUN apk add --no-cache curl ffmpeg libpq
 
 COPY --from=builder /app/.venv /app/.venv
 

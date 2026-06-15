@@ -79,6 +79,29 @@ class Settings(BaseSettings):
     # On Twilio trial accounts, only verified numbers can be called.
     kiosk_test_call_numbers: str = Field(default="", alias="KIOSK_TEST_CALL_NUMBERS")
 
+    # ─── Kiosk speech-to-text ─────────────────────────────────────────
+    kiosk_stt_enabled: bool = Field(default=True, alias="KIOSK_STT_ENABLED")
+    kiosk_stt_provider: str = Field(default="local", alias="KIOSK_STT_PROVIDER")  # local | openai | auto
+    kiosk_stt_model_path: str = Field(
+        default="/models/ggml-tiny.en-q5_1.bin",
+        alias="KIOSK_STT_MODEL_PATH",
+    )
+    kiosk_stt_whisper_bin: str = Field(
+        default="/usr/local/bin/whisper-cli",
+        alias="KIOSK_STT_WHISPER_BIN",
+    )
+    kiosk_stt_max_seconds: int = Field(default=6, alias="KIOSK_STT_MAX_SECONDS")
+    kiosk_stt_language: str = Field(default="en", alias="KIOSK_STT_LANGUAGE")
+    kiosk_stt_openai_model: str = Field(
+        default="gpt-4o-mini-transcribe",
+        alias="KIOSK_STT_OPENAI_MODEL",
+    )
+    kiosk_stt_min_chars: int = Field(default=3, alias="KIOSK_STT_MIN_CHARS")
+    kiosk_stt_max_upload_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        alias="KIOSK_STT_MAX_UPLOAD_BYTES",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

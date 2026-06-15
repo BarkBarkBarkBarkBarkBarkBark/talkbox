@@ -32,6 +32,27 @@ export const kioskApi = {
       body: JSON.stringify({ query: q }),
     }),
 
+  transcribeAudio: async (blob) => {
+    const form = new FormData();
+    form.append("audio", blob, "kiosk-voice.webm");
+    const res = await fetch(`${BASE_URL}/api/kiosk/speech/transcribe`, {
+      method: "POST",
+      body: form,
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (!res.ok) {
+      const err = new Error(data?.detail || data?.error || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  },
+
   // Request a real outbound call. The backend refuses any number that is not
   // in the agencies database (allowlist) — no arbitrary dialing.
   startCall: ({ phone, name }) =>
