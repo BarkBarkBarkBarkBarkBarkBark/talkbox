@@ -194,6 +194,35 @@
   color: hsl(var(--primary-foreground));
 }
 
+.kiosk-voice-banner-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.45em;
+  min-width: 0;
+}
+
+.kiosk-voice-meter {
+  height: 0.55em;
+  border-radius: 999px;
+  /* Always-visible track so the user knows the meter exists */
+  background: hsl(var(--primary) / 0.18);
+  overflow: hidden;
+  border: 1px solid hsl(var(--primary) / 0.35);
+}
+
+.kiosk-voice-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--primary) / 0.55);
+  transition: width 0.06s linear;
+}
+
+/* Brighter fill while the recorder is running */
+.kiosk-voice-meter--active .kiosk-voice-meter-fill {
+  background: hsl(var(--primary));
+}
+
 /* ───── Chat-first ask surface ───── */
 .kiosk-ask-form {
   display: flex;

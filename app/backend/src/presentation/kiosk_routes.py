@@ -182,6 +182,7 @@ async def kiosk_speech_transcribe(audio: UploadFile = File(...)) -> KioskSpeechR
     uploaded = await audio.read(settings.kiosk_stt_max_upload_bytes + 1)
     if len(uploaded) > settings.kiosk_stt_max_upload_bytes:
         raise HTTPException(status_code=413, detail="Uploaded audio is too large.")
+    logger.info("kiosk speech upload: filename=%s bytes=%d", audio.filename, len(uploaded))
     try:
         result = kiosk_stt_service.transcribe(uploaded, audio.filename or "audio.webm")
     except KioskSttError as exc:

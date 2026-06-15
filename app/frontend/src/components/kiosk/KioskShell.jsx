@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./kiosk.css";
 import { useKeypadInput } from "../../hooks/useKeypadInput.js";
 import { SCREENS, TABS, useKioskStateMachine } from "../../hooks/useKioskStateMachine.js";
+import { playKeyTone } from "../../lib/keyTone.js";
 import KioskStatusBar from "./KioskStatusBar.jsx";
 import KioskFooterCommands from "./KioskFooterCommands.jsx";
 import KioskTabs from "./KioskTabs.jsx";
@@ -45,7 +46,12 @@ export default function KioskShell({ demo = false }) {
   } = machine;
   const [clock, setClock] = useState("");
 
-  useKeypadInput(handleKey, { enabled: true });
+  const handleKeyWithTone = useCallback((key) => {
+    playKeyTone(key);
+    handleKey(key);
+  }, [handleKey]);
+
+  useKeypadInput(handleKeyWithTone, { enabled: true });
 
   useEffect(() => {
     const tick = () => {
@@ -71,7 +77,7 @@ export default function KioskShell({ demo = false }) {
           return (
             <KioskDialPad
               number={state.dialNumber}
-              onKey={handleKey}
+              onKey={handleKeyWithTone}
               onCall={dialCall}
               onDelete={dialDelete}
               onClear={dialClear}
@@ -99,13 +105,13 @@ export default function KioskShell({ demo = false }) {
             category={state.category}
             items={state.items}
             lastQuery={state.lastQuery}
-            onKey={handleKey}
+            onKey={handleKeyWithTone}
           />
         );
       case SCREENS.RESOURCE_DETAIL:
-        return <KioskResourceDetail item={state.selected} onKey={handleKey} />;
+        return <KioskResourceDetail item={state.selected} onKey={handleKeyWithTone} />;
       case SCREENS.CALL_CONFIRM:
-        return <KioskCallConfirm item={state.selected} onKey={handleKey} />;
+        return <KioskCallConfirm item={state.selected} onKey={handleKeyWithTone} />;
       case SCREENS.CALL_ACTIVE:
         return (
           <KioskCallActive
@@ -113,7 +119,7 @@ export default function KioskShell({ demo = false }) {
             status={state.callStatus}
             simulated={state.callSimulated}
             reason={state.callReason}
-            onKey={handleKey}
+            onKey={handleKeyWithTone}
             onHangUp={hangUp}
           />
         );
@@ -150,10 +156,10 @@ export default function KioskShell({ demo = false }) {
       </div>
       {demo && !(onHome && state.tab === TABS.DIAL) ? (
         <div className="kiosk-keypad-tray">
-          <SimulatedKeypad onKey={handleKey} />
+          <SimulatedKeypad onKey={handleKeyWithTone} />
         </div>
       ) : null}
-      <KioskFooterCommands onKey={handleKey} hints={footerHints(state)} />
+      <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
     </div>
   );
 }

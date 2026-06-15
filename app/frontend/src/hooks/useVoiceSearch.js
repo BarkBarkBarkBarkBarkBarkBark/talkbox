@@ -8,6 +8,76 @@ function chooseMimeType() {
   return MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
+// Always-on mic level monitor. Mounts a persistent getUserMedia stream and
+// runs an AudioContext analyser loop. Use in any component that needs a live
+// volume reading without starting a full recording session.
+export function useMicLevel({ enabled = true } = {}) {
+  const [micLevel, setMicLevel] = useState(0);
+  const [micReady, setMicReady] = useState(false);
+  const streamRef = useRef(null);
+  const contextRef = useRef(null);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (!navigator.mediaDevices?.getUserMedia) return;
+
+    let cancelled = false;
+
+    const start = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+
+        const ctx = new AudioContext();
+        contextRef.current = ctx;
+
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+
+        const samples = new Uint8Array(analyser.fftSize);
+        setMicReady(true);
+
+        const tick = () => {
+          if (cancelled) return;
+          analyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (let i = 0; i < samples.length; i++) {
+            const s = (samples[i] - 128) / 128;
+            sum += s * s;
+          }
+          const rms = Math.sqrt(sum / samples.length);
+          setMicLevel(Math.min(1, rms * 6));
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      } catch {
+        // permission denied or no mic — stay at zero
+      }
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      contextRef.current?.close?.().catch(() => {});
+      contextRef.current = null;
+      streamRef.current?.getTracks?.().forEach((t) => t.stop());
+      streamRef.current = null;
+      setMicLevel(0);
+      setMicReady(false);
+    };
+  }, [enabled]);
+
+  return { micLevel, micReady };
+}
+
 export function useVoiceSearch({ maxSeconds = 6, enabled = true } = {}) {
   const [voiceStatus, setVoiceStatus] = useState("idle");
   const [voiceError, setVoiceError] = useState(null);
@@ -55,7 +125,11 @@ export function useVoiceSearch({ maxSeconds = 6, enabled = true } = {}) {
       setVoiceStatus("error");
       return null;
     }
-    if (statusRef.current === "requesting-permission" || statusRef.current === "listening" || statusRef.current === "transcribing") {
+    if (
+      statusRef.current === "requesting-permission" ||
+      statusRef.current === "listening" ||
+      statusRef.current === "transcribing"
+    ) {
       return null;
     }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useMicLevel } from "../../hooks/useVoiceSearch.js";
 
 const PhoneIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="1.3em" height="1.3em" viewBox="0 0 24 24" fill="currentColor">
@@ -26,16 +27,21 @@ export default function KioskAskHome({
     ref.current?.focus();
   }, []);
 
+  const { micLevel, micReady } = useMicLevel({ enabled: speechEnabled });
+
   const canSubmit = Boolean(query.trim());
+  const isListening = voiceStatus === "listening";
+
   const voiceMessage = (() => {
     if (!speechEnabled) return "Speech search is unavailable.";
     if (voiceStatus === "requesting-permission") return "Allow microphone access.";
-    if (voiceStatus === "listening") return "Listening... speak now.";
+    if (isListening) return "Listening... speak now.";
     if (voiceStatus === "transcribing") return "Transcribing...";
     if (voiceStatus === "error") return voiceError || "Couldn't hear that. Press * and try again.";
     if (lastTranscript) return `I heard: ${lastTranscript}`;
     return "Press * to speak.";
   })();
+
   // VOICE_INPUT is redundant here (the input is right there) and CALL_211 is
   // promoted to the hero button above.
   const chips = (menu || []).filter(
@@ -68,15 +74,32 @@ export default function KioskAskHome({
       </button>
 
       <p className="kiosk-subtitle kiosk-ask-or">
-        Or search for a specific organisation — for example “I need a shelter for tonight”.
+        Or search for a specific organisation — for example "I need a shelter for tonight".
       </p>
 
       <div
-        className={`kiosk-voice-banner ${voiceStatus === "listening" ? "kiosk-pulse" : ""}`}
+        className={`kiosk-voice-banner ${isListening ? "kiosk-pulse" : ""}`}
         aria-live="polite"
       >
         <span className="k">*</span>
-        <span>{voiceMessage}</span>
+        <div className="kiosk-voice-banner-body">
+          <span>{voiceMessage}</span>
+          {speechEnabled && (
+            <div
+              className={`kiosk-voice-meter ${isListening ? "kiosk-voice-meter--active" : ""}`}
+              role="meter"
+              aria-label="Microphone level"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(micLevel * 100)}
+            >
+              <div
+                className="kiosk-voice-meter-fill"
+                style={{ width: `${Math.max(micReady ? 2 : 0, micLevel * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <form
