@@ -1,20 +1,22 @@
 import { useEffect } from "react";
 
-// Maps physical keyboard events to the kiosk's 12-key ATM keypad vocabulary so
-// the entire UX can be driven from a normal USB keyboard number row (and later
-// from a real keypad / USB encoder that emits the same keys).
+// Maps physical keyboard / USB numpad events to the kiosk's key vocabulary so
+// the entire UX can be driven from a standard numeric keypad. Every physical
+// key has ONE stable meaning regardless of screen — this is deliberate so a
+// printed sticker over a key is always accurate.
 //
-// Canonical keys: "1".."9", "0", "*", "#".
-// Convenience aliases so a laptop tester isn't hunting for * and #:
-//   Enter / NumpadEnter / "+"  -> "#"      (submit / select)
-//   Escape                     -> "0"      (back / home)
-//   Backspace                  -> "BS"     (delete digit on dial pad, else back)
-//   "/"                        -> "*"      (repeat / help)
-//   "c" / "C"                  -> "CALL"   (green call button / future GPIO)
-//   "h" / "H"                  -> "HANGUP" (red hang-up button / future GPIO)
-//
-// While a text field is focused (the ASK_HOME input) we ignore digit keys so
-// typing works; only Escape is intercepted so the user can always back out.
+// Numpad layout → meaning:
+//   1..9, 0                    -> digits        (jump straight to a numbered item / dial)
+//   "*"                        -> "*"           (Talk: ask out loud / read screen aloud)
+//   "/"                        -> "BROWSE"      (open the Browse menu)
+//   "."  (Del)                 -> "DIAL"        (open the Dial pad)
+//   "-"                        -> "PREV"        (move the highlight up / previous item)
+//   "+"                        -> "NEXT"        (move the highlight down / next item)
+//   Enter / NumpadEnter        -> "#"           (OK: open highlighted item / place call)
+//   Backspace                  -> "BS"          (delete a dialed digit, otherwise back)
+//   Escape                     -> "0"           (back / home)
+//   "c" / "C"                  -> "CALL"        (green call button / future GPIO)
+//   "h" / "H"                  -> "HANGUP"      (red hang-up button / future GPIO)
 
 const DIGITS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 
@@ -24,10 +26,12 @@ function normalize(e) {
   if (k === "*") return "*";
   if (k === "#") return "#";
   if (k === "Enter") return "#";
-  if (k === "+") return "#";
+  if (k === "/") return "BROWSE";
+  if (k === "." || k === "Delete") return "DIAL";
+  if (k === "-") return "PREV";
+  if (k === "+") return "NEXT";
   if (k === "Escape") return "0";
   if (k === "Backspace") return "BS";
-  if (k === "/") return "*";
   if (k === "c" || k === "C") return "CALL";
   if (k === "h" || k === "H") return "HANGUP";
   return null;

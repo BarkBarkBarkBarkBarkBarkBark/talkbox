@@ -1,6 +1,7 @@
-// Numbered resource results. Press N (or tap a row) to open the detail screen.
-// The asked question is echoed so the single-turn flow stays legible.
-export default function KioskResourceList({ category, items, lastQuery, onKey }) {
+// Numbered resource results. Press N (or tap a row) to open the detail screen,
+// or use – / + to move the highlight and Enter to open. The asked question is
+// echoed so the single-turn flow stays legible.
+export default function KioskResourceList({ category, items, cursor = 0, lastQuery, onKey }) {
   return (
     <div className="kiosk-content">
       {lastQuery ? (
@@ -9,13 +10,17 @@ export default function KioskResourceList({ category, items, lastQuery, onKey })
         </p>
       ) : null}
       <h1 className="kiosk-title">{category || "Results"}</h1>
-      <p className="kiosk-subtitle">Press a number to choose. Press 0 to ask again.</p>
+      <p className="kiosk-subtitle">
+        Press a number, or use <strong>–</strong> / <strong>+</strong> to move and{" "}
+        <strong>Enter</strong> to open. Press 0 to ask again.
+      </p>
       <div className="kiosk-list">
-        {items.map((item) => (
+        {items.map((item, i) => (
           <button
             key={item.number}
             type="button"
-            className="kiosk-row"
+            className={`kiosk-row ${i === cursor ? "is-selected" : ""}`}
+            aria-current={i === cursor}
             onClick={() => onKey?.(String(item.number))}
           >
             <span className="kiosk-key-badge">{item.number}</span>

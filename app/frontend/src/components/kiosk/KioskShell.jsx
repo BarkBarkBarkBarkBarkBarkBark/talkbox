@@ -35,10 +35,8 @@ export default function KioskShell({ demo = false }) {
   const {
     state,
     handleKey,
-    setQuery,
     setTab,
     selectMenuEntry,
-    runQuery,
     dialDelete,
     dialClear,
     dialCall,
@@ -71,7 +69,7 @@ export default function KioskShell({ demo = false }) {
     switch (state.screen) {
       case SCREENS.ASK_HOME:
         if (state.tab === TABS.BROWSE) {
-          return <KioskMenu menu={state.menu} onMenuEntry={selectMenuEntry} />;
+          return <KioskMenu menu={state.menu} cursor={state.cursor} onMenuEntry={selectMenuEntry} />;
         }
         if (state.tab === TABS.DIAL) {
           return (
@@ -87,7 +85,6 @@ export default function KioskShell({ demo = false }) {
         return (
           <KioskAskHome
             menu={state.menu}
-            onMenuEntry={selectMenuEntry}
             voiceStatus={state.voiceStatus}
             voiceError={state.voiceError}
             lastTranscript={state.lastTranscript}
@@ -101,6 +98,7 @@ export default function KioskShell({ demo = false }) {
           <KioskResourceList
             category={state.category}
             items={state.items}
+            cursor={state.cursor}
             lastQuery={state.lastQuery}
             onKey={handleKeyWithTone}
           />
@@ -153,7 +151,7 @@ export default function KioskShell({ demo = false }) {
       </div>
       {demo && !(onHome && state.tab === TABS.DIAL) ? (
         <div className="kiosk-keypad-tray">
-          <SimulatedKeypad onKey={handleKeyWithTone} />
+          <SimulatedKeypad onKey={handleKeyWithTone} variant="full" />
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
@@ -166,18 +164,36 @@ function footerHints(state) {
     return [
       { key: "0", label: "Phone menu key" },
       { key: "*", label: "Phone menu key" },
-      { key: "#", label: "Phone menu key" },
+      { key: "#", display: "↵", label: "Phone menu key" },
     ];
   }
   if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.ASK) {
     return [
-      { key: "0", label: "Clear / Home" },
-      { key: "*", label: "Speak" },
+      { key: "*", label: "Talk" },
+      { key: "0", label: "Home" },
+    ];
+  }
+  if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.DIAL) {
+    return [
+      { key: "BS", display: "⌫", label: "Delete" },
+      { key: "#", display: "↵", label: "Call" },
+      { key: "0", label: "Home" },
+    ];
+  }
+  if (
+    (state.screen === SCREENS.ASK_HOME && state.tab === TABS.BROWSE) ||
+    state.screen === SCREENS.RESULTS_LIST
+  ) {
+    return [
+      { key: "PREV", display: "–", label: "Up" },
+      { key: "NEXT", display: "+", label: "Down" },
+      { key: "#", display: "↵", label: "Open" },
+      { key: "0", label: "Back" },
     ];
   }
   return [
     { key: "0", label: "Back / Home" },
-    { key: "*", label: "Repeat / Help" },
-    { key: "#", label: "Select" },
+    { key: "*", label: "Repeat" },
+    { key: "#", display: "↵", label: "Select" },
   ];
 }

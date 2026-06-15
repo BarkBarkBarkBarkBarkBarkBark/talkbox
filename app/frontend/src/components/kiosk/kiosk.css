@@ -73,6 +73,10 @@
 
 .kiosk-tab {
   flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   padding: clamp(0.45rem, 1.6vh, 0.8rem);
   border: 2px solid hsl(var(--border));
   border-radius: var(--radius-md);
@@ -87,6 +91,26 @@
 .kiosk-tab.is-active {
   border-color: hsl(var(--primary));
   background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+/* The dedicated key for each tab, so it matches a future printed sticker. */
+.kiosk-tab-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.3em;
+  border-radius: 0.35em;
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--foreground));
+  font-size: 0.85em;
+  font-weight: 800;
+}
+
+.kiosk-tab.is-active .kiosk-tab-key {
+  background: hsl(var(--primary-foreground) / 0.25);
   color: hsl(var(--primary-foreground));
 }
 
@@ -588,6 +612,14 @@
   /* Fill the available height of the right column exactly */
   height: 100%;
   width: min(18rem, 52vw);
+}
+
+/* Full navigation keypad (demo tray): mirrors a real USB numpad. */
+.kiosk-keypad--full {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  width: min(24rem, 70vw);
+  margin: 0 auto;
 }
 
 .kiosk-keypad button {

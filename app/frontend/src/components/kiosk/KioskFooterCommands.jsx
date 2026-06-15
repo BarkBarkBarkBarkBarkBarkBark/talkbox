@@ -37,7 +37,7 @@ export default function KioskFooterCommands({ onKey, hints }) {
           className="kiosk-cmd"
           onClick={() => onKey?.(h.key)}
         >
-          <span className="k">{h.key}</span>
+          <span className="k">{h.display || h.key}</span>
           <span>{h.label}</span>
         </button>
       ))}

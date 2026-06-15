@@ -56,6 +56,7 @@ const initialState = {
   lastQuery: "",
   dialNumber: "",
   category: null,
+  cursor: 0,
   items: [],
   fallback: null,
   selected: null,
@@ -73,7 +74,16 @@ function reducer(state, action) {
     case "SET_QUERY":
       return { ...state, query: action.query };
     case "SET_TAB":
-      return { ...state, screen: SCREENS.ASK_HOME, tab: action.tab, error: null };
+      return { ...state, screen: SCREENS.ASK_HOME, tab: action.tab, cursor: 0, error: null };
+    case "MOVE_CURSOR": {
+      const len = action.length;
+      if (!len || len <= 0) return state;
+      let next = state.cursor + action.delta;
+      if (next < 0) next = 0;
+      if (next > len - 1) next = len - 1;
+      if (next === state.cursor) return state;
+      return { ...state, cursor: next };
+    }
     case "GO_HOME":
       return { ...state, screen: SCREENS.ASK_HOME, callStatus: "idle", error: null };
     case "DIAL_APPEND":
@@ -92,6 +102,7 @@ function reducer(state, action) {
         lastQuery: action.query || state.lastQuery,
         category: action.category,
         items: action.items,
+        cursor: 0,
         fallback: action.fallback,
         spokenSummary: action.spokenSummary,
         selected: null,
@@ -139,12 +150,15 @@ function describeScreen(state) {
   switch (state.screen) {
     case SCREENS.ASK_HOME:
       if (state.tab === TABS.BROWSE)
-        return "Browse menu. Press a number to choose a category, or press zero to go back to asking.";
+        return "Browse menu. Press a number to choose a category, or use minus and plus to move and Enter to open.";
       if (state.tab === TABS.DIAL)
-        return "Dial pad. Enter a phone number with the keypad, then press the green Call button or the hash key to call.";
+        return "Dial pad. Enter a phone number with the keypad, then press the green Call button or Enter to call.";
       return "Press star to speak what you need, or press 9 to call 211.";
     case SCREENS.RESULTS_LIST:
-      return state.spokenSummary || "Here are your results. Press a number to choose one.";
+      return (
+        state.spokenSummary ||
+        "Here are your results. Press a number to choose one, or use minus and plus to move and Enter to open."
+      );
     case SCREENS.RESOURCE_DETAIL: {
       const s = state.selected;
       if (!s) return "No resource selected.";
@@ -453,12 +467,43 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
       }
 
-      // * starts one-shot voice search from Ask Home. Everywhere else it
-      // repeats/help-prompts, except during live calls where it is DTMF.
+      // BROWSE / DIAL: stable mode keys (numpad "/" and "."). They jump to the
+      // matching home tab from anywhere, so the sticker on the key is always
+      // accurate. During a live call they are inert (no accidental navigation).
+      if (key === "BROWSE" && s.screen !== SCREENS.CALL_ACTIVE) {
+        setTab(TABS.BROWSE);
+        announce("Browse menu. Use minus and plus to move, Enter to open.");
+        return;
+      }
+      if (key === "DIAL" && s.screen !== SCREENS.CALL_ACTIVE) {
+        setTab(TABS.DIAL);
+        announce("Dial pad. Enter a phone number, then press Enter to call.");
+        return;
+      }
+
+      // PREV / NEXT (numpad "-" / "+"): move the highlight through whatever
+      // list is on screen. Inert when there's nothing to scroll.
+      if (key === "PREV" || key === "NEXT") {
+        const delta = key === "NEXT" ? 1 : -1;
+        let list = null;
+        if (s.screen === SCREENS.ASK_HOME && s.tab === TABS.BROWSE) list = s.menu;
+        else if (s.screen === SCREENS.RESULTS_LIST) list = s.items;
+        if (list && list.length) {
+          dispatch({ type: "MOVE_CURSOR", delta, length: list.length });
+          let idx = s.cursor + delta;
+          if (idx < 0) idx = 0;
+          if (idx > list.length - 1) idx = list.length - 1;
+          const item = list[idx];
+          if (item) announce(item.label || item.name || "");
+        }
+        return;
+      }
+
+      // * = Talk: from any home tab go to Ask and listen; on every other
+      // non-call screen it reads the screen aloud. (Live call: DTMF, below.)
       if (
         key === "*" &&
         s.screen === SCREENS.ASK_HOME &&
-        s.tab === TABS.ASK &&
         voice.voiceStatus !== "requesting-permission" &&
         voice.voiceStatus !== "listening" &&
         voice.voiceStatus !== "transcribing"
@@ -466,8 +511,6 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         runVoiceSearch();
         return;
       }
-
-      // * = repeat / help on every other non-call screen.
       if (key === "*" && s.screen !== SCREENS.CALL_ACTIVE) {
         announce(describeScreen(s));
         return;
@@ -487,22 +530,20 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           if (key === "0") {
             if (s.tab === TABS.BROWSE) {
               dispatch({ type: "SET_TAB", tab: TABS.ASK });
-            } else if (s.query) {
-              dispatch({ type: "SET_QUERY", query: "" });
             }
             return;
           }
           if (key === "#") {
-            if (s.tab === TABS.ASK) runQuery(s.query);
+            // OK / Enter on the Browse tab opens the highlighted category.
+            if (s.tab === TABS.BROWSE) selectMenuEntry(s.menu[s.cursor]);
             return;
           }
           const n = Number(key);
           if (n >= 1 && n <= 9) {
-            // Digits drive the menu on the Browse tab, and act as quick
-            // shortcuts on the Ask tab while the input is still empty.
-            if (s.tab === TABS.BROWSE || !s.query.trim()) {
-              selectMenuEntry(s.menu.find((m) => m.key === n));
-            }
+            // Digits jump straight to a numbered menu entry. This keeps the
+            // beloved "press 9 to call 211" shortcut working on the Ask tab,
+            // and drives the numbered categories on the Browse tab.
+            selectMenuEntry(s.menu.find((m) => m.key === n));
           }
           return;
         }
@@ -510,6 +551,15 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         case SCREENS.RESULTS_LIST: {
           if (key === "0") {
             dispatch({ type: "RESET" });
+            return;
+          }
+          if (key === "#") {
+            // OK / Enter opens the highlighted resource.
+            const item = s.items[s.cursor];
+            if (item) {
+              dispatch({ type: "SELECT", item });
+              announce(`${item.name}. ${item.description || ""}`);
+            }
             return;
           }
           const n = Number(key);
@@ -601,6 +651,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       runQuery,
       runVoiceSearch,
       selectMenuEntry,
+      setTab,
       startCall,
       voice.voiceStatus,
     ],
