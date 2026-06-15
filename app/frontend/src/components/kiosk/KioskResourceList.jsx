@@ -12,7 +12,7 @@ export default function KioskResourceList({ category, items, cursor = 0, lastQue
       <h1 className="kiosk-title">{category || "Results"}</h1>
       <p className="kiosk-subtitle">
         Press a number, or use <strong>–</strong> / <strong>+</strong> to move and{" "}
-        <strong>Enter</strong> to open. Press 0 to ask again.
+        <strong>Enter</strong> to open.
       </p>
       <div className="kiosk-list">
         {items.map((item, i) => (

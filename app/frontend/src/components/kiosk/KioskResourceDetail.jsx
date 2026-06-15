@@ -14,11 +14,11 @@ export default function KioskResourceDetail({ item, onKey }) {
         ) : null}
         {item.phone_display ? <p className="kiosk-phone">{item.phone_display}</p> : null}
         <div className="kiosk-actions">
-          <button type="button" className="kiosk-action back" onClick={() => onKey?.("0")}>
-            <span className="k">0</span> Back
+          <button type="button" className="kiosk-action back" onClick={() => onKey?.("BS")}>
+            <span className="k">⌫</span> Back
           </button>
           <button type="button" className="kiosk-action call" onClick={() => onKey?.("#")}>
-            <span className="k">#</span> Call
+            <span className="k">↵</span> Call
           </button>
         </div>
       </div>

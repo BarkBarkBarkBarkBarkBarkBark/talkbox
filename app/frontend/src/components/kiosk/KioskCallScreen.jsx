@@ -22,7 +22,7 @@ export function KioskCallConfirm({ item, onKey }) {
           This is a live call — please speak clearly into the microphone.
         </p>
         <div className="kiosk-actions">
-          <button type="button" className="kiosk-action hangup" onClick={() => onKey?.("0")}>
+          <button type="button" className="kiosk-action hangup" onClick={() => onKey?.("HANGUP")}>
             <HangUpIcon /> Cancel
           </button>
           <button type="button" className="kiosk-action call" onClick={() => onKey?.("#")}>
@@ -69,7 +69,7 @@ export function KioskCallActive({ item, status, simulated, reason, onKey, onHang
           <button
             type="button"
             className={isLive ? "kiosk-action hangup" : "kiosk-action back"}
-            onClick={() => isLive ? onHangUp?.() : onKey?.("0")}
+            onClick={() => onHangUp?.()}
           >
             {isLive ? <HangUpIcon /> : null} {isLive ? "End call" : "Go back"}
           </button>

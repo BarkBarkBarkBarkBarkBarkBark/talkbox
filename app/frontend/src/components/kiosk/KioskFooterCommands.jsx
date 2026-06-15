@@ -15,9 +15,9 @@ const HangUpIcon = () => (
 // a physical green/red button pair will emit later (keyboard: C / H).
 export default function KioskFooterCommands({ onKey, hints }) {
   const items = hints || [
-    { key: "0", label: "Back / Home" },
+    { key: "BS", display: "⌫", label: "Back" },
     { key: "*", label: "Repeat / Help" },
-    { key: "#", label: "Select" },
+    { key: "#", display: "↵", label: "Select" },
   ];
   return (
     <footer className="kiosk-footer">

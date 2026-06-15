@@ -22,7 +22,7 @@ const NUMERIC = [
 ];
 
 const FULL = [
-  { label: "/", token: "BROWSE" },
+  { label: "/", token: "CYCLE_TAB" },
   { label: "*", token: "*" },
   { label: "⌫", token: "BS" },
   { label: "7", token: "7" },

@@ -122,14 +122,14 @@ export default function KioskShell({ demo = false }) {
         return (
           <CenterMessage
             title="No match found"
-            subtitle="Press 9 to call the 211 help line, or 0 to ask again."
+            subtitle="Press 9 to call the 211 help line, or * to ask again."
           />
         );
       case SCREENS.ERROR:
         return (
           <CenterMessage
             title="Something went wrong"
-            subtitle={`${state.error || "Please try again."} Press 0 to start over.`}
+            subtitle={`${state.error || "Please try again."} Press * to start over.`}
           />
         );
       default:
@@ -169,30 +169,35 @@ function footerHints(state) {
   }
   if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.ASK) {
     return [
+      { key: "CYCLE_TAB", display: "/", label: "Change tab" },
       { key: "*", label: "Talk" },
-      { key: "0", label: "Home" },
     ];
   }
   if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.DIAL) {
     return [
+      { key: "CYCLE_TAB", display: "/", label: "Change tab" },
       { key: "BS", display: "⌫", label: "Delete" },
       { key: "#", display: "↵", label: "Call" },
-      { key: "0", label: "Home" },
     ];
   }
-  if (
-    (state.screen === SCREENS.ASK_HOME && state.tab === TABS.BROWSE) ||
-    state.screen === SCREENS.RESULTS_LIST
-  ) {
+  if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.BROWSE) {
+    return [
+      { key: "CYCLE_TAB", display: "/", label: "Change tab" },
+      { key: "PREV", display: "–", label: "Up" },
+      { key: "NEXT", display: "+", label: "Down" },
+      { key: "#", display: "↵", label: "Open" },
+    ];
+  }
+  if (state.screen === SCREENS.RESULTS_LIST) {
     return [
       { key: "PREV", display: "–", label: "Up" },
       { key: "NEXT", display: "+", label: "Down" },
       { key: "#", display: "↵", label: "Open" },
-      { key: "0", label: "Back" },
+      { key: "BS", display: "⌫", label: "Back" },
     ];
   }
   return [
-    { key: "0", label: "Back / Home" },
+    { key: "BS", display: "⌫", label: "Back" },
     { key: "*", label: "Repeat" },
     { key: "#", display: "↵", label: "Select" },
   ];

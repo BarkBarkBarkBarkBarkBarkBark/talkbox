@@ -45,6 +45,21 @@ export const TABS = {
   DIAL: "dial",
 };
 
+const TAB_ORDER = [TABS.ASK, TABS.BROWSE, TABS.DIAL];
+
+function nextTab(tab) {
+  const i = TAB_ORDER.indexOf(tab);
+  return TAB_ORDER[(i + 1) % TAB_ORDER.length];
+}
+
+function describeTab(tab) {
+  if (tab === TABS.BROWSE)
+    return "Browse menu. Use minus and plus to move, Enter to open.";
+  if (tab === TABS.DIAL)
+    return "Dial pad. Enter a phone number, then press Enter to call.";
+  return "Ask. Press star to speak, or press 9 to call 211.";
+}
+
 const MAX_DIAL_DIGITS = 11;
 
 const initialState = {
@@ -150,10 +165,10 @@ function describeScreen(state) {
   switch (state.screen) {
     case SCREENS.ASK_HOME:
       if (state.tab === TABS.BROWSE)
-        return "Browse menu. Press a number to choose a category, or use minus and plus to move and Enter to open.";
+        return describeTab(TABS.BROWSE);
       if (state.tab === TABS.DIAL)
-        return "Dial pad. Enter a phone number with the keypad, then press the green Call button or Enter to call.";
-      return "Press star to speak what you need, or press 9 to call 211.";
+        return describeTab(TABS.DIAL);
+      return describeTab(TABS.ASK);
     case SCREENS.RESULTS_LIST:
       return (
         state.spokenSummary ||
@@ -162,16 +177,16 @@ function describeScreen(state) {
     case SCREENS.RESOURCE_DETAIL: {
       const s = state.selected;
       if (!s) return "No resource selected.";
-      return `${s.name}. ${s.description || ""} Press the hash key to call, or zero to go back.`;
+      return `${s.name}. ${s.description || ""} Press the green Call button to call, or Back to return.`;
     }
     case SCREENS.CALL_CONFIRM:
-      return `Call ${state.selected?.name || "this resource"}? Press the green Call button or hash to confirm, or zero to cancel.`;
+      return `Call ${state.selected?.name || "this resource"}? Press the green Call button to confirm, or the red button to cancel.`;
     case SCREENS.CALL_ACTIVE:
       return "Call in progress. Use the keypad to answer phone menus. Press the red End Call button to hang up.";
     case SCREENS.EMPTY:
       return state.spokenSummary || "No match found. You can call 211 for help.";
     case SCREENS.ERROR:
-      return "Something went wrong. Press zero to return to the menu.";
+      return "Something went wrong. Press Back to return to the menu.";
     default:
       return "";
   }
@@ -282,7 +297,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         announce(data.spoken_summary || "");
       } catch (err) {
         dispatch({ type: "ERROR", error: err.message || "Query failed." });
-        announce("Something went wrong. Press zero to return to the menu.");
+        announce("Something went wrong. Press Back to return to the menu.");
       }
     },
     [announce, armIdleTimer],
@@ -342,7 +357,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       phone_display: formatDialed(digits),
     };
     dispatch({ type: "CALL_CONFIRM", item });
-    announce(`Call ${formatDialed(digits)}? Press hash to confirm, or zero to cancel.`);
+    announce(`Call ${formatDialed(digits)}? Press the green Call button to confirm, or the red button to cancel.`);
   }, [announce, armIdleTimer]);
 
   const startCall = useCallback(
@@ -396,7 +411,6 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     }
     cancelSpeech();
     armIdleTimer();
-    dispatch({ type: "SET_TAB", tab: TABS.ASK });
     announce("Listening.");
     const transcript = await voice.startVoiceSearch();
     if (!transcript) {
@@ -415,14 +429,17 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       const s = stateRef.current;
       kioskApi.logEvent({ event_type: "keypress", session_id: undefined, payload: { key, screen: s.screen } });
 
-      // Backspace: deletes a digit on the dial pad, otherwise acts as 0.
+      // Backspace = "Back": deletes a digit on the dial pad, otherwise steps
+      // back one screen. It NEVER affects a live call (only the red button can
+      // end a call). 0 is intentionally a plain number key everywhere, so there
+      // is no overloaded key that could cancel a call by accident.
       if (key === "BS") {
         if (s.screen === SCREENS.ASK_HOME && s.tab === TABS.DIAL) {
           dispatch({ type: "DIAL_DELETE" });
           return;
         }
         if (s.screen === SCREENS.CALL_ACTIVE) return; // never hang up / DTMF via backspace
-        key = "0";
+        // Fall through: each screen below handles "BS" as a safe step-back.
       }
 
       // HANGUP: the dedicated red button (touch today, physical later). The
@@ -431,7 +448,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         if (s.screen === SCREENS.CALL_ACTIVE) {
           hangUp();
         } else if (s.screen === SCREENS.CALL_CONFIRM) {
-          handleKey("0"); // cancel the pending call
+          handleKey("BS"); // cancel the pending call
         }
         return;
       }
@@ -467,17 +484,23 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
       }
 
-      // BROWSE / DIAL: stable mode keys (numpad "/" and "."). They jump to the
-      // matching home tab from anywhere, so the sticker on the key is always
-      // accurate. During a live call they are inert (no accidental navigation).
-      if (key === "BROWSE" && s.screen !== SCREENS.CALL_ACTIVE) {
-        setTab(TABS.BROWSE);
-        announce("Browse menu. Use minus and plus to move, Enter to open.");
+      // CYCLE_TAB / DIAL: "/" cycles home tabs (Ask → Browse → Dial); "."
+      // jumps straight to Dial. Inert during a live call.
+      if (key === "CYCLE_TAB" && s.screen !== SCREENS.CALL_ACTIVE) {
+        if (s.screen !== SCREENS.ASK_HOME) {
+          dispatch({ type: "RESET" });
+          announce(describeTab(TABS.ASK));
+          return;
+        }
+        const tab = nextTab(s.tab);
+        setTab(tab);
+        announce(describeTab(tab));
         return;
       }
       if (key === "DIAL" && s.screen !== SCREENS.CALL_ACTIVE) {
+        if (s.screen !== SCREENS.ASK_HOME) dispatch({ type: "GO_HOME" });
         setTab(TABS.DIAL);
-        announce("Dial pad. Enter a phone number, then press Enter to call.");
+        announce(describeTab(TABS.DIAL));
         return;
       }
 
@@ -499,11 +522,12 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         return;
       }
 
-      // * = Talk: from any home tab go to Ask and listen; on every other
-      // non-call screen it reads the screen aloud. (Live call: DTMF, below.)
+      // * = Talk: only on the Ask tab (never starts recording when browsing
+      // other tabs). Everywhere else on non-call screens it reads aloud.
       if (
         key === "*" &&
         s.screen === SCREENS.ASK_HOME &&
+        s.tab === TABS.ASK &&
         voice.voiceStatus !== "requesting-permission" &&
         voice.voiceStatus !== "listening" &&
         voice.voiceStatus !== "transcribing"
@@ -527,7 +551,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             }
             return;
           }
-          if (key === "0") {
+          if (key === "BS") {
             if (s.tab === TABS.BROWSE) {
               dispatch({ type: "SET_TAB", tab: TABS.ASK });
             }
@@ -549,7 +573,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
 
         case SCREENS.RESULTS_LIST: {
-          if (key === "0") {
+          if (key === "BS") {
             dispatch({ type: "RESET" });
             return;
           }
@@ -574,19 +598,19 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
 
         case SCREENS.RESOURCE_DETAIL: {
-          if (key === "0") {
+          if (key === "BS") {
             dispatch({ type: "BACK_TO_RESULTS" });
             return;
           }
           if (key === "#") {
             dispatch({ type: "CALL_CONFIRM", item: s.selected });
-            announce(`Call ${s.selected?.name}? Press hash to confirm, or zero to cancel.`);
+            announce(`Call ${s.selected?.name}? Press the green Call button to confirm, or Back to cancel.`);
           }
           return;
         }
 
         case SCREENS.CALL_CONFIRM: {
-          if (key === "0") {
+          if (key === "BS") {
             // Return to the resource detail when the call came from results;
             // otherwise (dial pad / 211 shortcut) go back home.
             if (s.items.some((it) => it === s.selected)) {
@@ -606,21 +630,16 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           // During a live call every keypad press (including 0, * and #) is
           // forwarded to the far end as a DTMF tone so users can navigate IVR
           // menus and extensions. Hang-up is only triggered by the explicit
-          // red End Call button (onHangUp prop), never by a keypad key.
+          // red End Call button (onHangUp prop), never by a keypad key — so no
+          // keypad key (0 included) can ever drop a call by accident.
           const live =
             !s.callSimulated && (s.callStatus === "connected" || s.callStatus === "in-progress");
-          if (live) {
-            if (/^[0-9*#]$/.test(key)) voiceCall.sendDigits(key);
-            return;
-          }
-          // Not live (simulated, still connecting, failed, or ended): 0 backs
-          // out — cancelling a connecting call or leaving a failure screen.
-          if (key === "0") hangUp();
+          if (live && /^[0-9*#]$/.test(key)) voiceCall.sendDigits(key);
           return;
         }
 
         case SCREENS.EMPTY: {
-          if (key === "0") {
+          if (key === "BS") {
             dispatch({ type: "RESET" });
             return;
           }
@@ -629,7 +648,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             const item = s.fallback;
             if (item) {
               dispatch({ type: "CALL_CONFIRM", item });
-              announce("Call the 211 help line? Press hash to confirm, or zero to cancel.");
+              announce("Call the 211 help line? Press the green Call button or hash to confirm.");
             }
           }
           return;
@@ -638,7 +657,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         case SCREENS.ERROR:
         case SCREENS.LOADING:
         default: {
-          if (key === "0") dispatch({ type: "RESET" });
+          if (key === "BS") dispatch({ type: "RESET" });
           return;
         }
       }
