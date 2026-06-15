@@ -101,6 +101,37 @@ wait_for_health() {
     warn "Backend not healthy after 90s — check: talkbox logs"
 }
 
+cleanup_stale_containers() {
+    # Remove stray containers that collide with fixed service names
+    # (e.g. *_talkbox-backend) before compose tries to recreate.
+    local ids
+    ids="$(docker ps -a \
+        --filter "name=talkbox-backend" \
+        --filter "name=talkbox-frontend" \
+        --filter "name=talkbox-postgres" \
+        --filter "status=created" \
+        --filter "status=exited" \
+        --format '{{.ID}}')"
+
+    if [ -n "$ids" ]; then
+        note "Removing stale created/exited Talk Box containers..."
+        # shellcheck disable=SC2086
+        docker rm -f $ids >/dev/null 2>&1 || true
+        ok "Stale containers removed"
+    fi
+
+    local prefixed_ids
+    prefixed_ids="$(docker ps -a --format '{{.ID}} {{.Names}}' \
+        | awk '$2 ~ /.+_talkbox-(backend|frontend|postgres)$/ {print $1}')"
+
+    if [ -n "$prefixed_ids" ]; then
+        note "Removing conflicting prefixed Talk Box containers..."
+        # shellcheck disable=SC2086
+        docker rm -f $prefixed_ids >/dev/null 2>&1 || true
+        ok "Conflicting prefixed containers removed"
+    fi
+}
+
 summary_box() {
     # NB: docker-compose binds 127.0.0.1 only — the kiosk is reachable on this
     # machine, not on the LAN, unless compose is edited.
@@ -145,7 +176,13 @@ cmd_update() {
     publish_to_twilio
 
     step "Rebuilding and relaunching containers"
-    docker compose up -d --build 2>&1 | grep -E 'Built|Started|Healthy|Error' | sed 's/^ */  /' || true
+    cleanup_stale_containers
+    local compose_output
+    if ! compose_output="$(docker compose up -d --build 2>&1)"; then
+        echo "$compose_output" | grep -E 'Built|Started|Healthy|Error|Conflict|failed|Error response' | sed 's/^ */  /' || true
+        fail "Compose rebuild/relaunch failed"
+    fi
+    echo "$compose_output" | grep -E 'Built|Started|Healthy|Error' | sed 's/^ */  /' || true
     ok "Stack relaunched"
 
     step "Health check"

@@ -31,6 +31,7 @@ sudo apt-get install -y --no-install-recommends \
     openbox \
     x11-xserver-utils \
     unclutter \
+    network-manager \
     2>/dev/null || true
 
 # ── 2. Auto-login on tty1 (text console → startx) ───────────────────────────
@@ -47,6 +48,9 @@ sudo systemctl daemon-reload
 info "Writing ~/.xinitrc..."
 cat > "/home/${KIOSK_USER}/.xinitrc" <<EOF
 #!/bin/sh
+KIOSK_URL="${KIOSK_URL}"
+MAINTENANCE_FLAG="/tmp/talkbox-kiosk-maintenance.flag"
+
 # Disable screen blanking and power saving
 xset s off
 xset s noblank
@@ -64,8 +68,15 @@ until curl -fsS http://localhost:8085/api/health >/dev/null 2>&1; do
     sleep 3
 done
 
-# Launch Chromium in kiosk mode
-exec chromium-browser \
+# Relaunch Chromium unless maintenance mode is active. This avoids blank
+# screens if the browser exits unexpectedly.
+while true; do
+  if [ -f "$MAINTENANCE_FLAG" ]; then
+    sleep 1
+    continue
+  fi
+
+  chromium-browser \
     --kiosk \
     --noerrdialogs \
     --disable-infobars \
@@ -77,25 +88,67 @@ exec chromium-browser \
     --check-for-update-interval=31536000 \
     --disable-pinch \
     --overscroll-history-navigation=0 \
-    "${KIOSK_URL}"
+    "$KIOSK_URL"
+
+  sleep 1
+done
 EOF
 chmod +x "/home/${KIOSK_USER}/.xinitrc"
 
 # ── 4. Auto-start X on login to tty1 ────────────────────────────────────────
 info "Configuring .bash_profile to startx on tty1..."
 BASH_PROFILE="/home/${KIOSK_USER}/.bash_profile"
-# Only add if not already there
-if ! grep -q "startx" "$BASH_PROFILE" 2>/dev/null; then
-    cat >> "$BASH_PROFILE" <<'EOF'
+
+touch "$BASH_PROFILE"
+
+# Remove legacy block from older kiosk installers.
+sed -i '/^# Auto-start X kiosk on tty1$/,/^fi$/d' "$BASH_PROFILE" || true
+
+# Remove previously managed block so re-runs always refresh behavior.
+sed -i '/^# >>> TALKBOX_KIOSK_AUTOSTART >>>$/,/^# <<< TALKBOX_KIOSK_AUTOSTART <<<$/d' "$BASH_PROFILE" || true
+
+cat >> "$BASH_PROFILE" <<'EOF'
+
+# >>> TALKBOX_KIOSK_AUTOSTART >>>
 
 # Auto-start X kiosk on tty1
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    # Escape hatch flag drops into a plain tty shell instead of relaunching X.
+    if [ -f "/tmp/talkbox-kiosk-tty.flag" ]; then
+        rm -f /tmp/talkbox-kiosk-tty.flag
+      rm -f /tmp/talkbox-kiosk-maintenance.flag
+        printf "\nTalk Box maintenance shell on tty1. Type 'exit' to relaunch kiosk.\n\n"
+        exec /bin/bash
+    fi
     exec startx -- -nocursor 2>/dev/null
 fi
+# <<< TALKBOX_KIOSK_AUTOSTART <<<
 EOF
-fi
 
-# ── 5. Openbox config: prevent Alt+F4 / right-click menu ────────────────────
+# ── 5. Plain TTY escape hatch script ────────────────────────────────────────
+info "Installing kiosk TTY escape hatch..."
+sudo tee /usr/local/bin/talkbox-kiosk-tty >/dev/null <<'EOF'
+#!/bin/sh
+set -eu
+
+MAINTENANCE_FLAG="/tmp/talkbox-kiosk-maintenance.flag"
+TTY_FLAG="/tmp/talkbox-kiosk-tty.flag"
+
+# Pause Chromium relaunch and request tty shell on next autologin.
+touch "$MAINTENANCE_FLAG"
+touch "$TTY_FLAG"
+
+# Close kiosk session and return to Linux console.
+pkill -TERM -f "chromium-browser.*--kiosk" >/dev/null 2>&1 || true
+pkill -TERM -f "/home/.*/.xinitrc" >/dev/null 2>&1 || true
+pkill -TERM -f "^openbox$" >/dev/null 2>&1 || true
+pkill -TERM -f "Xorg|X$" >/dev/null 2>&1 || true
+
+exit 0
+EOF
+sudo chmod +x /usr/local/bin/talkbox-kiosk-tty
+
+# ── 6. Openbox config: lock down desktop + add maintenance hotkey ──────────
 info "Locking down openbox..."
 OPENBOX_DIR="/home/${KIOSK_USER}/.config/openbox"
 mkdir -p "$OPENBOX_DIR"
@@ -103,7 +156,17 @@ cat > "$OPENBOX_DIR/rc.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
   <keyboard>
-    <!-- Unbind all default keyboard shortcuts -->
+    <!-- Dedicated plain tty escape hatch -->
+    <keybind key="C-A-t">
+      <action name="Execute">
+        <command>/usr/local/bin/talkbox-kiosk-tty</command>
+      </action>
+    </keybind>
+    <keybind key="C-A-F4">
+      <action name="Execute">
+        <command>/usr/local/bin/talkbox-kiosk-tty</command>
+      </action>
+    </keybind>
   </keyboard>
   <mouse>
     <context name="Desktop">
@@ -119,7 +182,9 @@ cat > "$OPENBOX_DIR/rc.xml" <<'EOF'
 </openbox_config>
 EOF
 
-# ── 6. Optional: splash screen while Docker starts ──────────────────────────
+sudo chown -R "${KIOSK_USER}:${KIOSK_USER}" "/home/${KIOSK_USER}/.config"
+
+# ── 7. Optional: splash screen while Docker starts ──────────────────────────
 info "Writing loading page..."
 sudo mkdir -p /var/www/loading
 sudo tee /var/www/loading/index.html >/dev/null <<'EOF'
@@ -152,7 +217,7 @@ sudo tee /var/www/loading/index.html >/dev/null <<'EOF'
 </html>
 EOF
 
-# ── 7. Done ──────────────────────────────────────────────────────────────────
+# ── 8. Done ──────────────────────────────────────────────────────────────────
 echo ""
 echo "  ╔══════════════════════════════════════════════════════════╗"
 echo "  ║  Kiosk display configured!                               ║"
@@ -162,10 +227,14 @@ echo "  ║    1. Boot → auto-login as ${KIOSK_USER}                       ║
 echo "  ║    2. Start X + openbox (no desktop, no taskbar)         ║"
 echo "  ║    3. Wait for Docker backend to be healthy              ║"
 echo "  ║    4. Open Chromium fullscreen on ${KIOSK_URL}  ║"
+echo "  ║    5. Ctrl+Alt+T or Ctrl+Alt+F4 opens tty shell          ║"
 echo "  ╠══════════════════════════════════════════════════════════╣"
-echo "  ║  To exit kiosk manually (SSH in and):                    ║"
-echo "  ║    sudo pkill chromium                                   ║"
-echo "  ║    sudo pkill xinit                                      ║"
+echo "  ║  Escape hatch in kiosk session:                          ║"
+echo "  ║    Press Ctrl+Alt+T (or Ctrl+Alt+F4)                    ║"
+echo "  ║    Run nmtui, then type exit to resume kiosk            ║"
+echo "  ╠══════════════════════════════════════════════════════════╣"
+echo "  ║  Emergency from SSH:                                     ║"
+echo "  ║    /usr/local/bin/talkbox-kiosk-tty                     ║"
 echo "  ╚══════════════════════════════════════════════════════════╝"
 echo ""
 warn "Reboot now to activate: sudo reboot"

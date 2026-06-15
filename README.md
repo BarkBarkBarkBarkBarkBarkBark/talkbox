@@ -157,6 +157,12 @@ bash ~/talkbox/kiosk-setup.sh       # fullscreen Chromium kiosk on boot
 # systemd service for boot-time Twilio sync: see header of twilio-sync.sh
 ```
 
+After kiosk setup, use the maintenance escape hatch from the kiosk session:
+
+- `Ctrl+Alt+T` (or `Ctrl+Alt+F4`) exits kiosk X and opens a plain tty shell.
+- Run `nmtui` there for Wi-Fi configuration, or any Linux commands.
+- Type `exit` to return to kiosk mode automatically.
+
 Ports bind to loopback by default. To expose the kiosk on your LAN, change
 `127.0.0.1:8084:80` to `8084:80` in `app/docker-compose.yml`
 (keep the backend on loopback — nginx proxies `/api`).
