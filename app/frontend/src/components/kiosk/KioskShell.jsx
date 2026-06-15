@@ -86,10 +86,7 @@ export default function KioskShell({ demo = false }) {
         }
         return (
           <KioskAskHome
-            query={state.query}
             menu={state.menu}
-            onChange={setQuery}
-            onSubmit={() => runQuery(state.query)}
             onMenuEntry={selectMenuEntry}
             voiceStatus={state.voiceStatus}
             voiceError={state.voiceError}
@@ -176,7 +173,6 @@ function footerHints(state) {
     return [
       { key: "0", label: "Clear / Home" },
       { key: "*", label: "Speak" },
-      { key: "#", label: "Search" },
     ];
   }
   return [

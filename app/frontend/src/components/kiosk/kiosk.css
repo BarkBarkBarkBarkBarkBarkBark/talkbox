@@ -90,246 +90,113 @@
   color: hsl(var(--primary-foreground));
 }
 
-/* ───── Hero "Call 211" button (the kiosk's headline action) ───── */
-.kiosk-hero-211 {
-  display: flex;
-  align-items: center;
-  gap: clamp(0.6rem, 2.5vw, 1.25rem);
-  width: 100%;
-  padding: clamp(0.8rem, 3vh, 1.5rem) clamp(0.9rem, 3vw, 1.75rem);
-  margin-bottom: clamp(0.6rem, 2.2vh, 1.1rem);
-  border: 3px solid hsl(var(--success));
-  border-radius: var(--radius-lg);
-  background: hsl(var(--success));
-  color: hsl(var(--success-foreground));
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 4px 16px hsl(var(--success) / 0.35);
-  transition: filter 0.12s ease, transform 0.08s ease;
-}
-
-.kiosk-hero-211:hover,
-.kiosk-hero-211:focus-visible {
-  filter: brightness(1.08);
-  outline: none;
-}
-
-.kiosk-hero-211:active {
-  transform: scale(0.99);
-}
-
-.kiosk-hero-211-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: clamp(2.6rem, 8vh, 3.8rem);
-  height: clamp(2.6rem, 8vh, 3.8rem);
-  border-radius: 9999px;
-  background: hsl(var(--success-foreground) / 0.2);
-  font-size: clamp(1.2rem, 3.4vh, 1.8rem);
-}
-
-.kiosk-hero-211-text {
+/* ───── Ask tab: two informational cards (Call 211 / Push to talk) ───── */
+.kiosk-ask {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
+  gap: clamp(0.75rem, 3vh, 2rem);
+  justify-content: stretch;
 }
 
-.kiosk-hero-211-title {
-  font-size: clamp(1.25rem, 4vh, 2rem);
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.kiosk-hero-211-sub {
-  font-size: clamp(0.85rem, 2.2vh, 1.1rem);
-  font-weight: 500;
-  opacity: 0.9;
-}
-
-.kiosk-hero-211-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  margin-left: auto;
-  width: clamp(2rem, 6vh, 3rem);
-  height: clamp(2rem, 6vh, 3rem);
-  border-radius: 9999px;
-  background: hsl(var(--success-foreground) / 0.2);
-  font-size: clamp(1rem, 3vh, 1.5rem);
-  font-weight: 700;
-}
-
-.kiosk-ask-or {
-  margin-bottom: clamp(0.4rem, 1.5vh, 0.75rem);
-}
-
-.kiosk-voice-banner {
+/* Each card takes an equal share of the available height so the layout
+   scales with the screen rather than relying on fixed sizes. */
+.kiosk-ask-card {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: clamp(0.5rem, 1.8vw, 0.85rem);
-  margin-bottom: clamp(0.5rem, 1.8vh, 0.9rem);
-  padding: clamp(0.45rem, 1.6vh, 0.75rem) clamp(0.7rem, 2.4vw, 1rem);
-  border: 2px solid hsl(var(--primary));
-  border-radius: var(--radius-md);
-  background: hsl(var(--secondary));
-  color: hsl(var(--foreground));
-  font-size: clamp(1rem, 2.6vh, 1.3rem);
-  font-weight: 700;
-  line-height: 1.15;
-}
-
-.kiosk-voice-banner .k {
-  display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  min-width: 1.7em;
-  height: 1.7em;
-  border-radius: 0.4em;
+  gap: clamp(0.4rem, 1.6vh, 1rem);
+  padding: clamp(0.75rem, 3vh, 1.75rem) clamp(1rem, 4vw, 2.5rem);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  overflow: hidden;
+}
+
+.kiosk-ask-card--call {
+  border: 3px solid hsl(var(--success));
+  background: hsl(var(--success));
+  color: hsl(var(--success-foreground));
+  box-shadow: 0 4px 16px hsl(var(--success) / 0.3);
+}
+
+.kiosk-ask-card--talk {
+  border: 3px solid hsl(var(--primary));
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
+  box-shadow: 0 4px 16px hsl(var(--primary) / 0.3);
 }
 
-.kiosk-voice-banner-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.45em;
-  min-width: 0;
-}
-
-.kiosk-voice-meter {
-  height: 0.55em;
-  border-radius: 999px;
-  /* Always-visible track so the user knows the meter exists */
-  background: hsl(var(--primary) / 0.18);
-  overflow: hidden;
-  border: 1px solid hsl(var(--primary) / 0.35);
-}
-
-.kiosk-voice-meter-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: hsl(var(--primary) / 0.55);
-  transition: width 0.06s linear;
-}
-
-/* Brighter fill while the recorder is running */
-.kiosk-voice-meter--active .kiosk-voice-meter-fill {
-  background: hsl(var(--primary));
-}
-
-/* ───── Chat-first ask surface ───── */
-.kiosk-ask-form {
-  display: flex;
-  align-items: stretch;
-  gap: clamp(0.4rem, 1.5vw, 0.75rem);
-}
-
-.kiosk-ask-input {
-  flex: 1 1 auto;
-  min-height: clamp(3.5rem, 12vh, 6rem);
-  padding: clamp(0.6rem, 2vh, 1rem) clamp(0.75rem, 2.5vw, 1.25rem);
-  border: 2px solid hsl(var(--border));
-  border-radius: var(--radius-lg);
-  background: hsl(var(--card));
-  color: hsl(var(--card-foreground));
-  font-family: inherit;
-  font-size: clamp(1.05rem, 2.8vh, 1.4rem);
-  line-height: 1.3;
-  resize: none;
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.kiosk-ask-input:focus-visible {
-  outline: none;
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25);
-}
-
-.kiosk-ask-submit {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  min-width: clamp(4.5rem, 14vw, 6.5rem);
-  border: 2px solid hsl(var(--success));
-  border-radius: var(--radius-lg);
-  background: hsl(var(--success));
-  color: hsl(var(--success-foreground));
-  font-size: clamp(0.9rem, 2.2vh, 1.1rem);
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.12s ease, opacity 0.12s ease;
-}
-
-.kiosk-ask-submit:hover:not(:disabled) {
+.kiosk-ask-card--active {
   filter: brightness(1.08);
 }
 
-.kiosk-ask-submit:disabled {
-  opacity: 0.45;
-  cursor: default;
+.kiosk-ask-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: clamp(2.6rem, 8vh, 4.25rem);
+  height: clamp(2.6rem, 8vh, 4.25rem);
+  border-radius: 9999px;
+  background: hsl(0 0% 100% / 0.2);
+  font-size: clamp(1.4rem, 4vh, 2.2rem);
 }
 
-.kiosk-ask-submit .k {
+.kiosk-ask-card-title {
+  font-size: clamp(1.5rem, 5.5vh, 3rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.kiosk-ask-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: clamp(1rem, 3vh, 1.6rem);
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.kiosk-ask-card-key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.6em;
   height: 1.6em;
+  padding: 0 0.3em;
   border-radius: 0.4em;
-  background: hsl(var(--success-foreground) / 0.2);
-  font-weight: 700;
+  background: hsl(0 0% 100% / 0.25);
+  font-weight: 800;
 }
 
-.kiosk-ask-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: clamp(0.35rem, 1.2vh, 0.6rem);
-  margin-top: clamp(0.75rem, 3vh, 1.5rem);
-  overflow: auto;
+.kiosk-ask-card-status {
+  font-size: clamp(0.85rem, 2.2vh, 1.15rem);
+  font-weight: 500;
+  opacity: 0.85;
+  max-width: 30ch;
 }
 
-.kiosk-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: clamp(0.35rem, 1.3vh, 0.6rem) clamp(0.6rem, 2vw, 1rem);
-  border: 2px solid hsl(var(--border));
-  border-radius: 9999px;
-  background: hsl(var(--card));
-  color: hsl(var(--card-foreground));
-  font-size: clamp(0.85rem, 2.1vh, 1.05rem);
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+.kiosk-ask-card .kiosk-voice-meter {
+  width: 100%;
+  max-width: 22rem;
+  height: clamp(0.4rem, 1.1vh, 0.6rem);
+  border-radius: 999px;
+  background: hsl(0 0% 100% / 0.2);
+  overflow: hidden;
+  border: 1px solid hsl(0 0% 100% / 0.35);
 }
 
-.kiosk-chip:hover,
-.kiosk-chip:focus-visible {
-  border-color: hsl(var(--primary));
-  outline: none;
+.kiosk-ask-card .kiosk-voice-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(0 0% 100% / 0.55);
+  transition: width 0.06s linear;
 }
 
-.kiosk-chip-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5em;
-  height: 1.5em;
-  border-radius: 9999px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-size: 0.85em;
-  font-weight: 700;
+.kiosk-ask-card--active .kiosk-voice-meter-fill {
+  background: hsl(0 0% 100% / 0.95);
 }
 
 /* ───── Dial tab ───── */

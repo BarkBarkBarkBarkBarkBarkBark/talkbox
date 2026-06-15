@@ -142,7 +142,7 @@ function describeScreen(state) {
         return "Browse menu. Press a number to choose a category, or press zero to go back to asking.";
       if (state.tab === TABS.DIAL)
         return "Dial pad. Enter a phone number with the keypad, then press the green Call button or the hash key to call.";
-      return "Tell us what you need. Type or speak, then press the hash key to search.";
+      return "Press star to speak what you need, or press 9 to call 211.";
     case SCREENS.RESULTS_LIST:
       return state.spokenSummary || "Here are your results. Press a number to choose one.";
     case SCREENS.RESOURCE_DETAIL: {

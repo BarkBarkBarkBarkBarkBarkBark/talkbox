@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { useMicLevel } from "../../hooks/useVoiceSearch.js";
 
 const PhoneIcon = () => (
@@ -7,46 +6,34 @@ const PhoneIcon = () => (
   </svg>
 );
 
-// Chat-first home surface (chat-first). Calling 211 is the
-// headline action — a big green button anyone can hit without typing. The
-// open-ended input and numbered category chips sit beneath it for people who
-// want to find a specific organisation instead.
+const MicIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="1.3em" height="1.3em" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+  </svg>
+);
+
+// Ask tab: Call 211 hero + push-to-talk voice entry (key *).
 export default function KioskAskHome({
-  query,
   menu,
-  onChange,
-  onSubmit,
-  onMenuEntry,
   voiceStatus = "idle",
   voiceError = null,
   lastTranscript = "",
   speechEnabled = true,
 }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-
   const { micLevel, micReady } = useMicLevel({ enabled: speechEnabled });
 
-  const canSubmit = Boolean(query.trim());
   const isListening = voiceStatus === "listening";
 
   const voiceMessage = (() => {
     if (!speechEnabled) return "Speech search is unavailable.";
     if (voiceStatus === "requesting-permission") return "Allow microphone access.";
-    if (isListening) return "Listening... speak now.";
-    if (voiceStatus === "transcribing") return "Transcribing...";
+    if (isListening) return "Listening… speak now.";
+    if (voiceStatus === "transcribing") return "Transcribing…";
     if (voiceStatus === "error") return voiceError || "Couldn't hear that. Press * and try again.";
     if (lastTranscript) return `I heard: ${lastTranscript}`;
     return "Press * to speak.";
   })();
 
-  // VOICE_INPUT is redundant here (the input is right there) and CALL_211 is
-  // promoted to the hero button above.
-  const chips = (menu || []).filter(
-    (m) => m.action !== "VOICE_INPUT" && m.action !== "CALL_211",
-  );
   const call211Entry = (menu || []).find((m) => m.action === "CALL_211") || {
     key: 9,
     action: "CALL_211",
@@ -55,98 +42,43 @@ export default function KioskAskHome({
 
   return (
     <div className="kiosk-content kiosk-ask">
-      <button
-        type="button"
-        className="kiosk-hero-211"
-        onClick={() => onMenuEntry?.(call211Entry)}
-        aria-label="Call 211 to get help now (key 9)"
-      >
-        <span className="kiosk-hero-211-icon">
+      <div className="kiosk-ask-card kiosk-ask-card--call">
+        <span className="kiosk-ask-card-icon">
           <PhoneIcon />
         </span>
-        <span className="kiosk-hero-211-text">
-          <span className="kiosk-hero-211-title">Call 211 — Get Help Now</span>
-          <span className="kiosk-hero-211-sub">
-            Free help line for shelter, food, health care and more
-          </span>
+        <span className="kiosk-ask-card-title">Call 211</span>
+        <span className="kiosk-ask-card-action">
+          Press <span className="kiosk-ask-card-key">{call211Entry.key}</span>
         </span>
-        <span className="kiosk-hero-211-key">{call211Entry.key}</span>
-      </button>
-
-      <p className="kiosk-subtitle kiosk-ask-or">
-        Or search for a specific organisation — for example "I need a shelter for tonight".
-      </p>
-
-      <div
-        className={`kiosk-voice-banner ${isListening ? "kiosk-pulse" : ""}`}
-        aria-live="polite"
-      >
-        <span className="k">*</span>
-        <div className="kiosk-voice-banner-body">
-          <span>{voiceMessage}</span>
-          {speechEnabled && (
-            <div
-              className={`kiosk-voice-meter ${isListening ? "kiosk-voice-meter--active" : ""}`}
-              role="meter"
-              aria-label="Microphone level"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(micLevel * 100)}
-            >
-              <div
-                className="kiosk-voice-meter-fill"
-                style={{ width: `${Math.max(micReady ? 2 : 0, micLevel * 100)}%` }}
-              />
-            </div>
-          )}
-        </div>
       </div>
 
-      <form
-        className="kiosk-ask-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
+      <div
+        className={`kiosk-ask-card kiosk-ask-card--talk ${isListening ? "kiosk-ask-card--active kiosk-pulse" : ""}`}
+        aria-live="polite"
       >
-        <textarea
-          ref={ref}
-          className="kiosk-ask-input"
-          rows={2}
-          value={query}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              onSubmit();
-            }
-          }}
-          placeholder="I need help with…"
-          aria-label="Describe what you need"
-        />
-        <button
-          type="submit"
-          className="kiosk-ask-submit"
-          disabled={!canSubmit}
-          aria-label="Search (hash key)"
-        >
-          <span className="k">#</span>
-          Search
-        </button>
-      </form>
-
-      <div className="kiosk-ask-chips" aria-label="Quick categories">
-        {chips.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className="kiosk-chip"
-            onClick={() => onMenuEntry?.(item)}
+        <span className="kiosk-ask-card-icon">
+          <MicIcon />
+        </span>
+        <span className="kiosk-ask-card-title">Ask for Something</span>
+        <span className="kiosk-ask-card-action">
+          Press &amp; hold <span className="kiosk-ask-card-key">*</span> to talk
+        </span>
+        <span className="kiosk-ask-card-status">{voiceMessage}</span>
+        {speechEnabled && (
+          <div
+            className={`kiosk-voice-meter ${isListening ? "kiosk-voice-meter--active" : ""}`}
+            role="meter"
+            aria-label="Microphone level"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(micLevel * 100)}
           >
-            <span className="kiosk-chip-key">{item.key}</span>
-            {item.label}
-          </button>
-        ))}
+            <div
+              className="kiosk-voice-meter-fill"
+              style={{ width: `${Math.max(micReady ? 2 : 0, micLevel * 100)}%` }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
