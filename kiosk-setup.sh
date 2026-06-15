@@ -184,7 +184,43 @@ EOF
 
 sudo chown -R "${KIOSK_USER}:${KIOSK_USER}" "/home/${KIOSK_USER}/.config"
 
-# ── 7. Optional: splash screen while Docker starts ──────────────────────────
+# ── 7. USB audio — route default ALSA device + persist volume ───────────────
+info "Configuring USB audio (P10S)..."
+
+# Pin the USB audio device as the ALSA default for both playback and capture.
+# Without this, ALSA may fall back to the HDMI audio devices.
+cat > "/home/${KIOSK_USER}/.asoundrc" <<'EOF'
+# Route all ALSA default audio to the USB P10S (card 0).
+pcm.!default {
+    type plug
+    slave.pcm "hw:0,0"
+}
+
+ctl.!default {
+    type hw
+    card 0
+}
+EOF
+
+# Set USB PCM playback volume to 100% immediately (idempotent).
+amixer -c 0 set 'PCM' 100% unmute 2>/dev/null || true
+
+# Restore 100% PCM volume at every desktop session start.
+# ALSA does not persist mixer state automatically on this device, so we use
+# an LXDE/openbox autostart entry that runs after the USB device initialises.
+mkdir -p "/home/${KIOSK_USER}/.config/autostart"
+cat > "/home/${KIOSK_USER}/.config/autostart/usb-audio-volume.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=USB Audio Volume
+Exec=/bin/bash -c 'sleep 3 && amixer -c 0 set PCM 100% unmute'
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Comment=Restore USB P10S PCM playback volume to 100% on session start
+EOF
+
+# ── 8. Optional: splash screen while Docker starts ──────────────────────────
 info "Writing loading page..."
 sudo mkdir -p /var/www/loading
 sudo tee /var/www/loading/index.html >/dev/null <<'EOF'
@@ -227,7 +263,8 @@ echo "  ║    1. Boot → auto-login as ${KIOSK_USER}                       ║
 echo "  ║    2. Start X + openbox (no desktop, no taskbar)         ║"
 echo "  ║    3. Wait for Docker backend to be healthy              ║"
 echo "  ║    4. Open Chromium fullscreen on ${KIOSK_URL}  ║"
-echo "  ║    5. Ctrl+Alt+T or Ctrl+Alt+F4 opens tty shell          ║"
+echo "  ║    5. USB audio routed + PCM volume locked at 100%       ║"
+echo "  ║    6. Ctrl+Alt+T or Ctrl+Alt+F4 opens tty shell          ║"
 echo "  ╠══════════════════════════════════════════════════════════╣"
 echo "  ║  Escape hatch in kiosk session:                          ║"
 echo "  ║    Press Ctrl+Alt+T (or Ctrl+Alt+F4)                    ║"

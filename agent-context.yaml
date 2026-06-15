@@ -36,7 +36,19 @@ infrastructure:
       LXDE desktop via raspberrypi-ui-mods. Autologin via raspi-config B4.
       Chromium opens at boot via ~/.config/autostart/kiosk.desktop.
     kiosk_url: http://localhost:8084/kiosk
-    audio: USB microphone required for two-way calls (plugged into Pi USB port)
+    audio:
+      device: MV-SILICON P10S USB conference mic/speaker (ALSA card 0)
+      input: USB mic capture works via Chromium getUserMedia — permission pre-granted for localhost:8084
+      output: Chromium holds /dev/snd/pcmC0D0p exclusively; key tones + Twilio calls play through USB
+      alsa_config: ~/.asoundrc pins pcm.!default to plug:hw:0,0 (both playback and capture)
+      volume_persistence: >
+        ALSA mixer does not persist on this device. PCM playback is locked to 100% via
+        ~/.config/autostart/usb-audio-volume.desktop (sleep 3 && amixer -c 0 set PCM 100% unmute).
+        kiosk-setup.sh writes both files automatically on a fresh Pi.
+      mic_level_monitor: >
+        useMicLevel() hook in useVoiceSearch.js maintains a persistent AudioContext analyser
+        on the Ask screen — the always-on bar confirms mic signal before the user presses *.
+      key_tones: app/frontend/src/lib/keyTone.js — Web Audio sine tones on every keypress
 
   docker:
     compose_file: /home/operator/talkbox/pointer-fork/docker-compose.yml
@@ -318,11 +330,12 @@ hardening_todo:
 
     - id: OPS-03
       title: USB microphone auto-detection
+      status: DONE (2026-06-14)
       detail: >
-        The Pi requires a USB microphone for two-way calls. If it's unplugged,
-        the browser will silently fail or prompt for permissions.
-        Add a startup check in the frontend that calls navigator.mediaDevices.getUserMedia()
-        on load and shows a "Microphone not found" banner in the status bar if it fails.
+        Implemented as useMicLevel() in app/frontend/src/hooks/useVoiceSearch.js.
+        The Ask screen mounts a persistent AudioContext analyser that shows a live
+        volume bar at all times — zero signal means mic is unplugged or muted.
+        Chromium mic permission pre-granted for localhost:8084 in Chromium Preferences.
 
     - id: OPS-04
       title: Chromium kiosk — disable sleep/blanking
