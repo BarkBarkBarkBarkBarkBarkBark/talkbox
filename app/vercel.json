@@ -3,13 +3,14 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "includeFiles": "{backend/**,database/**}"
+      "includeFiles": "{backend/src/**,database/**}"
     },
     "api/kiosk/call/index.py": {
-      "includeFiles": "{backend/**,database/**}"
+      "includeFiles": "backend/src/**"
     }
   },
   "rewrites": [
+    { "source": "/api/kiosk/call/(.*)", "destination": "/api/kiosk/call/index" },
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
