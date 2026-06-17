@@ -3,10 +3,10 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "includeFiles": ["backend/**", "database/**"]
+      "includeFiles": "{backend/**,database/**}"
     },
     "api/kiosk/call/index.py": {
-      "includeFiles": ["backend/**", "database/**"]
+      "includeFiles": "{backend/**,database/**}"
     }
   },
   "rewrites": [
