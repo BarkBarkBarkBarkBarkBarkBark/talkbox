@@ -1,9 +1,12 @@
+import logging
 import os
 import sqlite3
 from pathlib import Path
 
 from src.infrastructure.config import settings
 from src.infrastructure.healthscout_agent.healthscout_db_schema import Doctor, Trasportation
+
+logger = logging.getLogger(__name__)
 
 
 class HealthScoutDB:
@@ -21,6 +24,10 @@ class HealthScoutDB:
         backend_dir = next((parent for parent in current_file.parents if parent.name == "backend"), None)
         if backend_dir is not None:
             return str(backend_dir.parent / "database" / f"{self.db_name}.db")
+        logger.warning(
+            "Could not derive bundled Healthscout DB path from %s; falling back to /app/database.",
+            current_file,
+        )
         return f"/app/database/{self.db_name}.db"
 
     def _candidate_paths(self) -> tuple[str, ...]:
