@@ -28,8 +28,8 @@ class Settings(BaseSettings):
 
     # ─── Persistence ──────────────────────────────────────────────────
     db_uri: str = Field(default="", alias="DB_URI")
-    db_name: str = Field(default="", alias="DB_NAME")
-    db_table_name: str = Field(default="", alias="DB_TABLE_NAME")
+    db_name: str = Field(default="sacramento", alias="DB_NAME")
+    db_table_name: str = Field(default="sacramento", alias="DB_TABLE_NAME")
 
     # ─── Observability ────────────────────────────────────────────────
     log_file: str = Field(default="app.log", alias="LOG_FILE")

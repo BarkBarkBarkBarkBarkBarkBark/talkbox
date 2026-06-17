@@ -1,8 +1,13 @@
+import logging
 import os
 import sqlite3
+from pathlib import Path
 
 from src.infrastructure.config import settings
 from src.infrastructure.healthscout_agent.healthscout_db_schema import Doctor, Trasportation
+
+logger = logging.getLogger(__name__)
+BUNDLED_BACKEND_DIRNAME = "backend"
 
 
 class HealthScoutDB:
@@ -15,11 +20,44 @@ class HealthScoutDB:
     def __init__(self, db_name: str | None = None):
         self.db_name = db_name or settings.db_name
 
+    def _bundled_db_path(self) -> str:
+        """Resolve the bundled SQLite asset path for repo/Vercel layouts.
+
+        When `backend/**` is packaged next to `database/**` (the repo checkout
+        and the Vercel function bundle), walk up to the `backend` directory and
+        point at its sibling `database/` folder.
+        """
+        current_file = Path(__file__).resolve()
+        backend_dir = next(
+            (parent for parent in current_file.parents if parent.name == BUNDLED_BACKEND_DIRNAME),
+            None,
+        )
+        if backend_dir is not None:
+            return str(backend_dir.parent / "database" / f"{self.db_name}.db")
+        logger.warning(
+            "Could not derive bundled Healthscout DB path from %s; falling back to /app/database.",
+            current_file,
+        )
+        return f"/app/database/{self.db_name}.db"
+
+    def _candidate_paths(self) -> tuple[str, ...]:
+        configured_db_path = os.environ.get("HEALTHSCOUT_DB_PATH")
+        candidates = [
+            configured_db_path,
+            f"/data/{self.db_name}.db",
+            self._bundled_db_path(),
+            f"/app/database/{self.db_name}.db",
+        ]
+        return tuple(path for path in candidates if path)
+
     def _connect(self) -> sqlite3.Connection:
-        db_path = f"/data/{self.db_name}.db"
-        if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Database file not found at {db_path}")
-        return sqlite3.connect(db_path)
+        candidate_paths = self._candidate_paths()
+        for db_path in candidate_paths:
+            if os.path.exists(db_path):
+                return sqlite3.connect(db_path)
+        raise FileNotFoundError(
+            f"Database file '{self.db_name}.db' not found. Checked: {', '.join(candidate_paths)}"
+        )
 
     def get_doctors_obj_from_query_results(self, cursor) -> list[Doctor]:
         doctors: list[Doctor] = []

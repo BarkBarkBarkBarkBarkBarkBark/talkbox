@@ -23,7 +23,7 @@ RUN apk add --no-cache \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/uv
 
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 
@@ -42,10 +42,11 @@ RUN apk add --no-cache curl ffmpeg libpq
 
 COPY --from=builder /app/.venv /app/.venv
 
-COPY src/ ./src/
-COPY alembic/ ./alembic/
-COPY alembic.ini main.py ./
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY backend/src/ ./src/
+COPY backend/alembic/ ./alembic/
+COPY backend/alembic.ini backend/main.py ./
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY database/sacramento.db /app/database/sacramento.db
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 
