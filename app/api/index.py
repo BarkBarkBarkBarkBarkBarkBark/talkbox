@@ -13,9 +13,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 # Point the Healthscout lookup at the same bundled SQLite asset Vercel ships
 # alongside this function unless an explicit override is already configured.
+default_db_name = os.environ.get("DB_NAME") or "sacramento"
 os.environ.setdefault(
     "HEALTHSCOUT_DB_PATH",
-    str(Path(__file__).parent.parent / "database" / f"{os.environ.get('DB_NAME', 'sacramento')}.db"),
+    str(Path(__file__).parent.parent / "database" / f"{default_db_name}.db"),
 )
 
 # Serverless functions have no persistent filesystem; redirect the log file to

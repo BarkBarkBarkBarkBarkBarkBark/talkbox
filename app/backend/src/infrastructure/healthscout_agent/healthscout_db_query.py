@@ -16,15 +16,19 @@ class HealthScoutDB:
     def __init__(self, db_name: str | None = None):
         self.db_name = db_name or settings.db_name
 
+    def _bundled_db_path(self) -> str:
+        current_file = Path(__file__).resolve()
+        backend_dir = next((parent for parent in current_file.parents if parent.name == "backend"), None)
+        if backend_dir is not None:
+            return str(backend_dir.parent / "database" / f"{self.db_name}.db")
+        return f"/app/database/{self.db_name}.db"
+
     def _candidate_paths(self) -> tuple[str, ...]:
-        bundled_db_path = (
-            Path(__file__).resolve().parents[4] / "database" / f"{self.db_name}.db"
-        )
         configured_db_path = os.environ.get("HEALTHSCOUT_DB_PATH")
         candidates = [
             configured_db_path,
             f"/data/{self.db_name}.db",
-            str(bundled_db_path),
+            self._bundled_db_path(),
             f"/app/database/{self.db_name}.db",
         ]
         return tuple(path for path in candidates if path)
