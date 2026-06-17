@@ -3,7 +3,7 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "runtime": "python3.12",
+      "runtime": "@vercel/python@6.45.0",
       "includeFiles": "{backend,database}/**"
     }
   },
