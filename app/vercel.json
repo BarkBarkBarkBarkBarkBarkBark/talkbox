@@ -3,12 +3,10 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "runtime": "python3.12",
-      "includeFiles": "backend/**"
+      "includeFiles": ["backend/**", "database/**"]
     },
     "api/kiosk/call/index.py": {
-      "runtime": "python3.12",
-      "includeFiles": "backend/**"
+      "includeFiles": ["backend/**", "database/**"]
     }
   },
   "rewrites": [
