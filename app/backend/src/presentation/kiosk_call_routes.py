@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 import time
+from urllib.parse import urljoin
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -30,7 +31,7 @@ router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 _voice_service = TwilioVoiceService()
 kiosk_call_service = KioskCallService(_voice_service)
 
-_PENDING_TTL = 90
+_IDENTITY_TOKEN_TTL_SECONDS = 90
 
 
 class KioskCallRequest(BaseModel):
@@ -143,7 +144,11 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
     if agency is None:
         raise HTTPException(status_code=403, detail="Number not on approved call list.")
 
-    identity = _encode_identity(e164, agency, int(time.time()) + _PENDING_TTL)
+    identity = _encode_identity(
+        e164,
+        agency,
+        int(time.time()) + _IDENTITY_TOKEN_TTL_SECONDS,
+    )
     token = _voice_service.generate_access_token(identity=identity)
     logger.info(
         "voice token issued: identity=%s agency=%s to=%s",
@@ -163,7 +168,7 @@ def _twilio_signature_valid(request: Request, form: dict) -> bool:
     url = (
         public_url
         if public_url.endswith("/api/kiosk/call/twiml")
-        else public_url + "/api/kiosk/call/twiml"
+        else urljoin(public_url + "/", "api/kiosk/call/twiml")
     )
     signature = request.headers.get("X-Twilio-Signature", "")
     return RequestValidator(settings.twilio_auth_token).validate(url, form, signature)
