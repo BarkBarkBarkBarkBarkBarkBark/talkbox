@@ -7,6 +7,7 @@ from src.infrastructure.config import settings
 from src.infrastructure.healthscout_agent.healthscout_db_schema import Doctor, Trasportation
 
 logger = logging.getLogger(__name__)
+BUNDLED_BACKEND_DIRNAME = "backend"
 
 
 class HealthScoutDB:
@@ -27,7 +28,10 @@ class HealthScoutDB:
         point at its sibling `database/` folder.
         """
         current_file = Path(__file__).resolve()
-        backend_dir = next((parent for parent in current_file.parents if parent.name == "backend"), None)
+        backend_dir = next(
+            (parent for parent in current_file.parents if parent.name == BUNDLED_BACKEND_DIRNAME),
+            None,
+        )
         if backend_dir is not None:
             return str(backend_dir.parent / "database" / f"{self.db_name}.db")
         logger.warning(
@@ -51,7 +55,9 @@ class HealthScoutDB:
         for db_path in candidate_paths:
             if os.path.exists(db_path):
                 return sqlite3.connect(db_path)
-        raise FileNotFoundError(f"Database file not found. Checked: {', '.join(candidate_paths)}")
+        raise FileNotFoundError(
+            f"Database file '{self.db_name}.db' not found. Checked: {', '.join(candidate_paths)}"
+        )
 
     def get_doctors_obj_from_query_results(self, cursor) -> list[Doctor]:
         doctors: list[Doctor] = []
