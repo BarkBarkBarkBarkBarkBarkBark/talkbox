@@ -35,11 +35,13 @@ jobs:
       matrix:
         include:
           - service: backend
-            context: ./backend
+            context: .
+            dockerfile: ./backend/Dockerfile
             target: api
             build_args: ""
           - service: frontend
             context: ./frontend
+            dockerfile: ./frontend/Dockerfile
             target: ""
             build_args: |
               VITE_API_URL=${{ vars.VITE_API_URL }}
@@ -75,6 +77,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           build-args: ${{ matrix.build_args }}
           push: true
@@ -110,12 +113,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish compose manifests and seed data to host
+      - name: Publish compose manifests to host
         run: |
-          sudo mkdir -p "${DEPLOY_DIR}/nginx" "${DEPLOY_DIR}/database"
+          sudo mkdir -p "${DEPLOY_DIR}/nginx"
           sudo cp docker-compose.yml "${DEPLOY_DIR}/docker-compose.yml"
           sudo cp nginx/default.conf "${DEPLOY_DIR}/nginx/default.conf"
-          sudo cp database/sacramento.db "${DEPLOY_DIR}/database/sacramento.db"
 
       - name: Render production environment file
         env:

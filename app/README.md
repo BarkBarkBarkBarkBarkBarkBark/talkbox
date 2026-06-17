@@ -47,7 +47,7 @@ Talk Box/
 │       ├── hooks/useChat.js        chat state + API client
 │       └── lib/                    api.js (fetch wrapper), auth.jsx (context), theme.jsx, utils.js (cn)
 ├── nginx/default.conf              reverse-proxy /api → backend:8000, SPA fallback
-├── database/sacramento.db          Healthscout SQLite (17 k rows), bind-mounted read-only
+├── database/sacramento.db          Healthscout SQLite (17 k rows), baked into the backend image
 ├── csv/                            operational dumps (gitignored, e.g. healthscout_providers.csv)
 ├── scripts/
 │   ├── README.md
@@ -186,8 +186,10 @@ Every `docker compose up` runs through the same deterministic sequence, with
 3. The FastAPI lifespan seeds the admin user (idempotent: if `ADMIN_EMAIL`
    already exists, no-op).
 4. `uvicorn` takes over. `/api/health` comes up.
-5. `database/sacramento.db` is bind-mounted read-only at `/data/sacramento.db`,
-   so Healthscout queries are served immediately.
+5. The backend image ships with `database/sacramento.db` at
+   `/app/database/sacramento.db`; if `/data/sacramento.db` is present it still
+   takes precedence as an override, so Healthscout queries are served
+   immediately in both containerized and Fly deployments.
 
 Set `TALKBOX_SKIP_BOOTSTRAP=1` in the backend env to bypass step 2 (useful for
 integration tests against a pre-populated DB).
@@ -285,15 +287,16 @@ Matrix over `backend` + `frontend`:
 - Builds with **Buildx** + GHA cache (`cache-from type=gha,scope=<svc>`).
 - Tags each image with `{branch}`, `sha-short`, and `latest` on the default branch.
 - Frontend receives `VITE_API_URL` / `VITE_APP_NAME` as build-args from GitHub
-  Actions vars; the backend bakes `alembic/`, the query-category JSONs, and
-  `agencies_master.csv` into the image so the seed step is self-sufficient.
+  Actions vars; the backend bakes `alembic/`, the query-category JSONs,
+  `agencies_master.csv`, and `database/sacramento.db` into the image so the
+  seed step and Healthscout lookups are self-sufficient.
 - Pushes to `ghcr.io/la-plas-growth/talkbox-{backend,frontend}`.
 
 ### `deploy`
 
 Runs after `build-and-publish` on the same self-hosted runner:
-1. Copies `docker-compose.yml`, `nginx/default.conf`, and the Healthscout
-   SQLite to `/opt/talkbox` on the host.
+1. Copies `docker-compose.yml` and `nginx/default.conf` to `/opt/talkbox` on
+   the host.
 2. Renders `/opt/talkbox/.env` from GitHub **secrets** (passwords, keys,
    DB_URI) + **vars** (non-sensitive config) with permission `600`.
 3. `docker compose pull && docker compose up -d --remove-orphans`.

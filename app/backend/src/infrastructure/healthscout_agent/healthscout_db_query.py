@@ -16,10 +16,16 @@ class HealthScoutDB:
         self.db_name = db_name or settings.db_name
 
     def _connect(self) -> sqlite3.Connection:
-        db_path = f"/data/{self.db_name}.db"
-        if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Database file not found at {db_path}")
-        return sqlite3.connect(db_path)
+        candidate_paths = (
+            f"/data/{self.db_name}.db",
+            f"/app/database/{self.db_name}.db",
+        )
+        for db_path in candidate_paths:
+            if os.path.exists(db_path):
+                return sqlite3.connect(db_path)
+        raise FileNotFoundError(
+            "Database file not found. Checked: " + ", ".join(candidate_paths)
+        )
 
     def get_doctors_obj_from_query_results(self, cursor) -> list[Doctor]:
         doctors: list[Doctor] = []

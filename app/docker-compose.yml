@@ -21,7 +21,8 @@ services:
     container_name: talkbox-backend
     image: ${IMAGE_BACKEND:-ghcr.io/la-plas-growth/talkbox-backend:latest}
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: api
     ports:
       # Loopback-only: host tooling can hit the API directly at 127.0.0.1:8085
@@ -30,7 +31,6 @@ services:
     env_file: .env
     volumes:
       - backend-data:/data
-      - ./database/sacramento.db:/data/sacramento.db:ro
     depends_on:
       talkbox-postgres:
         condition: service_healthy
