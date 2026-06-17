@@ -66,8 +66,9 @@ class KioskVoiceTokenResponse(BaseModel):
 
 
 def _identity_secret() -> bytes:
-    secret = settings.twilio_auth_token or settings.jwt_secret
-    return secret.encode("utf-8")
+    if not settings.twilio_auth_token:
+        raise RuntimeError("TWILIO_AUTH_TOKEN is required for kiosk call signing.")
+    return settings.twilio_auth_token.encode("utf-8")
 
 
 def _encode_identity(to_number: str, agency: str, expires: int) -> str:
@@ -155,7 +156,8 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
 
 def _twilio_signature_valid(request: Request, form: dict) -> bool:
     if not settings.twilio_auth_token or not settings.twilio_public_url:
-        return True
+        logger.warning("twiml webhook: missing Twilio signing configuration")
+        return False
 
     public_url = settings.twilio_public_url.rstrip("/")
     url = (
