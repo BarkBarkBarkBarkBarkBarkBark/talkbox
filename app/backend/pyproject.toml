@@ -3,7 +3,7 @@ name = "talkbox-backend"
 version = "1.0.0"
 description = "Talk Box backend — shelter-oriented query assistant (FastAPI + LangChain + pgvector)"
 requires-python = ">=3.11"
-readme = "../README.md"
+readme = "."
 license = { text = "Proprietary" }
 
 dependencies = [

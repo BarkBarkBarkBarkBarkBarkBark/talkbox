@@ -14,10 +14,6 @@ from src.infrastructure.sms.twilio_sms_service import TwilioSMSService
 from src.infrastructure.sql_agent.sql_executor import SQLExecutor
 from src.infrastructure.vector_store.pgvector_query_categorizer import PGVectorQueryCategorizer
 from src.presentation.auth import optional_current_user
-
-# No login wall: /api/query is open to anonymous users. The optional user is
-# kept only so authenticated requests are still attributed in logs.
-query_user_dep = optional_current_user
 from src.presentation.schemas import (
     ErrorResponse,
     HealthResponse,
@@ -25,6 +21,10 @@ from src.presentation.schemas import (
     QueryResponse,
     ResultsPayload,
 )
+
+# No login wall: /api/query is open to anonymous users. The optional user is
+# kept only so authenticated requests are still attributed in logs.
+query_user_dep = optional_current_user
 
 logger = logging.getLogger(__name__)
 
