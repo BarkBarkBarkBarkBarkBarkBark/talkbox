@@ -61,7 +61,7 @@ export default function KioskAskHome({
         </span>
         <span className="kiosk-ask-card-title">Ask for Something</span>
         <span className="kiosk-ask-card-action">
-          Press &amp; hold <span className="kiosk-ask-card-key">*</span> to talk
+          Press <span className="kiosk-ask-card-key">*</span> to talk
         </span>
         <span className="kiosk-ask-card-status">{voiceMessage}</span>
         {speechEnabled && (

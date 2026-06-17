@@ -15,8 +15,8 @@ import { useEffect } from "react";
 //   Enter / NumpadEnter        -> "#"           (OK: open highlighted item / place call)
 //   Backspace                  -> "BS"          (Back: delete a dialed digit, else step back)
 //   Escape                     -> "BS"          (Back, for keyboard testers)
-//   "c" / "C"                  -> "CALL"        (green call button / future GPIO)
-//   "h" / "H"                  -> "HANGUP"      (red hang-up button / future GPIO)
+//   "c" / "C"                  -> "CALL"        (dev shortcut: confirm / place call)
+//   "h" / "H"                  -> "HANGUP"      (dev shortcut: same as Backspace on a call)
 //
 // NOTE: "0" is deliberately ONLY ever the number 0 (a dialed digit or a DTMF
 // tone during a live call). It never navigates, cancels, or hangs up — there
@@ -25,6 +25,15 @@ import { useEffect } from "react";
 const DIGITS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 
 function normalize(e) {
+  const code = e.code;
+  if (/^Numpad[0-9]$/.test(code)) return code.slice(-1);
+  if (code === "NumpadMultiply") return "*";
+  if (code === "NumpadDivide") return "CYCLE_TAB";
+  if (code === "NumpadDecimal") return "DIAL";
+  if (code === "NumpadAdd") return "NEXT";
+  if (code === "NumpadSubtract") return "PREV";
+  if (code === "NumpadEnter") return "#";
+
   const k = e.key;
   if (DIGITS.has(k)) return k;
   if (k === "*") return "*";
@@ -46,6 +55,8 @@ export function useKeypadInput(onKey, { enabled = true } = {}) {
     if (!enabled) return undefined;
 
     function handler(e) {
+      if (e.repeat) return;
+
       const target = e.target;
       const typing =
         target &&

@@ -18,7 +18,7 @@ import { useVoiceSearch } from "./useVoiceSearch.js";
 //   RESULTS_LIST    numbered resources, press N to select
 //   RESOURCE_DETAIL one focused resource, # to call
 //   CALL_CONFIRM    confirm before dialing (no arbitrary dialing)
-//   CALL_ACTIVE     simulated/active call, 0 to hang up
+//   CALL_ACTIVE     simulated/active call, Backspace to hang up
 //   EMPTY           no match, offers 211
 //   ERROR           backend/network failure
 //
@@ -177,12 +177,12 @@ function describeScreen(state) {
     case SCREENS.RESOURCE_DETAIL: {
       const s = state.selected;
       if (!s) return "No resource selected.";
-      return `${s.name}. ${s.description || ""} Press the green Call button to call, or Back to return.`;
+      return `${s.name}. ${s.description || ""} Press Enter to call, or Backspace to go back.`;
     }
     case SCREENS.CALL_CONFIRM:
-      return `Call ${state.selected?.name || "this resource"}? Press the green Call button to confirm, or the red button to cancel.`;
+      return `Call ${state.selected?.name || "this resource"}? Press Enter to confirm, or Backspace to cancel.`;
     case SCREENS.CALL_ACTIVE:
-      return "Call in progress. Use the keypad to answer phone menus. Press the red End Call button to hang up.";
+      return "Call in progress. Use the keypad for phone menus. Press Backspace to end the call.";
     case SCREENS.EMPTY:
       return state.spokenSummary || "No match found. You can call 211 for help.";
     case SCREENS.ERROR:
@@ -199,6 +199,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
   const idleTimer = useRef(null);
   const callTimer = useRef(null);
+  const pendingDtmf = useRef("");
 
   const speechEnabled = state.config?.speech_enabled ?? true;
   const voice = useVoiceSearch({
@@ -275,6 +276,18 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     };
   }, [armIdleTimer]);
 
+  // If a caller starts entering extension digits before the call is fully
+  // connected, hold them briefly and send once Twilio reports a live call.
+  useEffect(() => {
+    const live =
+      state.screen === SCREENS.CALL_ACTIVE &&
+      !state.callSimulated &&
+      (state.callStatus === "connected" || state.callStatus === "in-progress");
+    if (!live || !pendingDtmf.current) return;
+    voiceCall.sendDigits(pendingDtmf.current);
+    pendingDtmf.current = "";
+  }, [state.screen, state.callSimulated, state.callStatus, voiceCall]);
+
   // ─── Actions ─────────────────────────────────────────────────────────
   const runQuery = useCallback(
     async (text) => {
@@ -330,7 +343,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           phone_display: "211 (help line)",
         };
         dispatch({ type: "CALL_CONFIRM", item });
-        announce("Call the 211 help line? Press the green Call button or hash to confirm.");
+        announce("Call the 211 help line? Press Enter to confirm.");
       }
     },
     [announce, armIdleTimer, runQuery],
@@ -357,7 +370,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       phone_display: formatDialed(digits),
     };
     dispatch({ type: "CALL_CONFIRM", item });
-    announce(`Call ${formatDialed(digits)}? Press the green Call button to confirm, or the red button to cancel.`);
+    announce(`Call ${formatDialed(digits)}? Press Enter to confirm, or Backspace to cancel.`);
   }, [announce, armIdleTimer]);
 
   const startCall = useCallback(
@@ -390,6 +403,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
   const hangUp = useCallback(() => {
     if (callTimer.current) clearTimeout(callTimer.current);
+    pendingDtmf.current = "";
     cancelSpeech();
     voiceCall.hangUp();
     kioskApi.logEvent({ event_type: "call_end" });
@@ -429,16 +443,17 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       const s = stateRef.current;
       kioskApi.logEvent({ event_type: "keypress", session_id: undefined, payload: { key, screen: s.screen } });
 
-      // Backspace = "Back": deletes a digit on the dial pad, otherwise steps
-      // back one screen. It NEVER affects a live call (only the red button can
-      // end a call). 0 is intentionally a plain number key everywhere, so there
-      // is no overloaded key that could cancel a call by accident.
+      // Backspace: on the dial pad deletes a digit; during a call ends the call;
+      // otherwise steps back one screen. 0 is always just the number 0.
       if (key === "BS") {
         if (s.screen === SCREENS.ASK_HOME && s.tab === TABS.DIAL) {
           dispatch({ type: "DIAL_DELETE" });
           return;
         }
-        if (s.screen === SCREENS.CALL_ACTIVE) return; // never hang up / DTMF via backspace
+        if (s.screen === SCREENS.CALL_ACTIVE) {
+          hangUp();
+          return;
+        }
         // Fall through: each screen below handles "BS" as a safe step-back.
       }
 
@@ -463,7 +478,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             return;
           case SCREENS.RESOURCE_DETAIL:
             dispatch({ type: "CALL_CONFIRM", item: s.selected });
-            announce(`Call ${s.selected?.name}? Press the green Call button to confirm.`);
+            announce(`Call ${s.selected?.name}? Press Enter to confirm.`);
             return;
           case SCREENS.EMPTY:
             handleKey("9"); // 211 fallback confirm
@@ -564,10 +579,19 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           }
           const n = Number(key);
           if (n >= 1 && n <= 9) {
+            if (n === 9) {
+              const call211 = s.menu.find((m) => m.action === "CALL_211");
+              if (call211) {
+                selectMenuEntry(call211);
+                return;
+              }
+            }
             // Digits jump straight to a numbered menu entry. This keeps the
             // beloved "press 9 to call 211" shortcut working on the Ask tab,
             // and drives the numbered categories on the Browse tab.
-            selectMenuEntry(s.menu.find((m) => m.key === n));
+            selectMenuEntry(
+              s.menu.find((m) => Number(m.key) === n || String(m.key) === String(n)),
+            );
           }
           return;
         }
@@ -604,7 +628,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           }
           if (key === "#") {
             dispatch({ type: "CALL_CONFIRM", item: s.selected });
-            announce(`Call ${s.selected?.name}? Press the green Call button to confirm, or Back to cancel.`);
+            announce(`Call ${s.selected?.name}? Press Enter to confirm, or Backspace to cancel.`);
           }
           return;
         }
@@ -627,14 +651,15 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         }
 
         case SCREENS.CALL_ACTIVE: {
-          // During a live call every keypad press (including 0, * and #) is
-          // forwarded to the far end as a DTMF tone so users can navigate IVR
-          // menus and extensions. Hang-up is only triggered by the explicit
-          // red End Call button (onHangUp prop), never by a keypad key — so no
-          // keypad key (0 included) can ever drop a call by accident.
-          const live =
-            !s.callSimulated && (s.callStatus === "connected" || s.callStatus === "in-progress");
-          if (live && /^[0-9*#]$/.test(key)) voiceCall.sendDigits(key);
+          // Live call: digits, * and # go to the far end as DTMF. End call via
+          // Backspace only (handled above) — Enter stays available for IVR menus.
+          if (!/^[0-9*#]$/.test(key) || s.callSimulated) return;
+          const live = s.callStatus === "connected" || s.callStatus === "in-progress";
+          if (live) {
+            voiceCall.sendDigits(key);
+          } else {
+            pendingDtmf.current += key;
+          }
           return;
         }
 
@@ -648,7 +673,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             const item = s.fallback;
             if (item) {
               dispatch({ type: "CALL_CONFIRM", item });
-              announce("Call the 211 help line? Press the green Call button or hash to confirm.");
+              announce("Call the 211 help line? Press Enter to confirm.");
             }
           }
           return;

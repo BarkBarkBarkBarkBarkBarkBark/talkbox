@@ -459,25 +459,6 @@
   border: 2px solid hsl(var(--border));
 }
 
-.kiosk-cmd-call {
-  background: hsl(var(--success));
-  border-color: hsl(var(--success));
-  color: hsl(var(--success-foreground));
-  font-weight: 700;
-}
-
-.kiosk-cmd-hangup {
-  background: hsl(var(--destructive));
-  border-color: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
-  font-weight: 700;
-}
-
-.kiosk-cmd-call:active,
-.kiosk-cmd-hangup:active {
-  filter: brightness(0.9);
-}
-
 .kiosk-cmd .k {
   display: inline-flex;
   align-items: center;
@@ -666,4 +647,44 @@
 
 .kiosk-pulse {
   animation: kiosk-pulse 1.2s ease-in-out infinite;
+}
+
+.kiosk-call-layout {
+  flex-direction: row;
+  align-items: stretch;
+  gap: clamp(0.6rem, 2.5vw, 1.25rem);
+  overflow: hidden;
+}
+
+.kiosk-call-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.kiosk-call-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kiosk-call-hint {
+  max-width: 34ch;
+}
+
+@media (max-width: 760px), (orientation: portrait) {
+  .kiosk-call-layout {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .kiosk-call-right {
+    width: 100%;
+  }
+
+  .kiosk-call-right .kiosk-keypad {
+    width: min(19rem, 90vw);
+    height: auto;
+    aspect-ratio: 3 / 4;
+  }
 }

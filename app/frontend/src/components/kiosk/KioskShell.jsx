@@ -40,7 +40,6 @@ export default function KioskShell({ demo = false }) {
     dialDelete,
     dialClear,
     dialCall,
-    hangUp,
   } = machine;
   const [clock, setClock] = useState("");
 
@@ -106,7 +105,7 @@ export default function KioskShell({ demo = false }) {
       case SCREENS.RESOURCE_DETAIL:
         return <KioskResourceDetail item={state.selected} onKey={handleKeyWithTone} />;
       case SCREENS.CALL_CONFIRM:
-        return <KioskCallConfirm item={state.selected} onKey={handleKeyWithTone} />;
+        return <KioskCallConfirm item={state.selected} />;
       case SCREENS.CALL_ACTIVE:
         return (
           <KioskCallActive
@@ -115,7 +114,6 @@ export default function KioskShell({ demo = false }) {
             simulated={state.callSimulated}
             reason={state.callReason}
             onKey={handleKeyWithTone}
-            onHangUp={hangUp}
           />
         );
       case SCREENS.EMPTY:
@@ -162,9 +160,16 @@ export default function KioskShell({ demo = false }) {
 function footerHints(state) {
   if (state.screen === SCREENS.CALL_ACTIVE) {
     return [
-      { key: "0", label: "Phone menu key" },
-      { key: "*", label: "Phone menu key" },
-      { key: "#", display: "↵", label: "Phone menu key" },
+      { key: "BS", display: "⌫", label: "End call" },
+      { key: "0", label: "Phone menu" },
+      { key: "*", label: "Phone menu" },
+      { key: "#", display: "↵", label: "Phone menu" },
+    ];
+  }
+  if (state.screen === SCREENS.CALL_CONFIRM) {
+    return [
+      { key: "BS", display: "⌫", label: "Cancel" },
+      { key: "#", display: "↵", label: "Call" },
     ];
   }
   if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.ASK) {

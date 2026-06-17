@@ -33,3 +33,5 @@ logs/
 # ───── Large local-only datasets (>GitHub limits / generated) ─────
 Health Scout/unnessecary/
 PDF_Analyzer/OutputDir/
+.vercel
+.env*
