@@ -41,7 +41,6 @@ jobs:
             build_args: ""
           - service: frontend
             context: ./frontend
-            dockerfile: ./frontend/Dockerfile
             target: ""
             build_args: |
               VITE_API_URL=${{ vars.VITE_API_URL }}
