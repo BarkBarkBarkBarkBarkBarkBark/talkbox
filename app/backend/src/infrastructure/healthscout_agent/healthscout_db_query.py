@@ -20,6 +20,12 @@ class HealthScoutDB:
         self.db_name = db_name or settings.db_name
 
     def _bundled_db_path(self) -> str:
+        """Resolve the bundled SQLite asset path for repo/Vercel layouts.
+
+        When `backend/**` is packaged next to `database/**` (the repo checkout
+        and the Vercel function bundle), walk up to the `backend` directory and
+        point at its sibling `database/` folder.
+        """
         current_file = Path(__file__).resolve()
         backend_dir = next((parent for parent in current_file.parents if parent.name == "backend"), None)
         if backend_dir is not None:
@@ -45,9 +51,7 @@ class HealthScoutDB:
         for db_path in candidate_paths:
             if os.path.exists(db_path):
                 return sqlite3.connect(db_path)
-        raise FileNotFoundError(
-            "Database file not found. Checked: " + ", ".join(candidate_paths)
-        )
+        raise FileNotFoundError(f"Database file not found. Checked: {', '.join(candidate_paths)}")
 
     def get_doctors_obj_from_query_results(self, cursor) -> list[Doctor]:
         doctors: list[Doctor] = []
