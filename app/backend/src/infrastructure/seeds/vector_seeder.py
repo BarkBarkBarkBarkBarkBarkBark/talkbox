@@ -15,7 +15,7 @@ import json
 import logging
 from pathlib import Path
 
-import psycopg2
+import psycopg
 
 from src.infrastructure.config import settings
 from src.infrastructure.db import to_sync_dsn
@@ -36,7 +36,7 @@ def _existing_count(collection_name: str) -> int:
     """Return the number of rows already in the collection, or 0 if the
     langchain_pg_* tables don't exist yet."""
     try:
-        with psycopg2.connect(to_sync_dsn(settings.db_uri)) as conn:
+        with psycopg.connect(to_sync_dsn(settings.db_uri)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -49,9 +49,9 @@ def _existing_count(collection_name: str) -> int:
                 )
                 row = cur.fetchone()
                 return int(row[0]) if row else 0
-    except psycopg2.errors.UndefinedTable:
+    except psycopg.errors.UndefinedTable:
         return 0
-    except psycopg2.Error as exc:
+    except psycopg.Error as exc:
         logger.warning("count check failed, will attempt seed: %s", exc)
         return 0
 

@@ -15,7 +15,7 @@ import csv
 import logging
 from pathlib import Path
 
-import psycopg2
+import psycopg
 
 from src.infrastructure.config import settings
 from src.infrastructure.db import to_sync_dsn
@@ -74,7 +74,7 @@ def seed_agencies(csv_path: Path | None = None) -> tuple[int, int]:
             seen.add(cat)
             categories.append(cat)
 
-    with psycopg2.connect(to_sync_dsn(settings.db_uri)) as conn:
+    with psycopg.connect(to_sync_dsn(settings.db_uri)) as conn:
         with conn.cursor() as cur:
             cur.execute("TRUNCATE agencies, categories RESTART IDENTITY CASCADE")
 
