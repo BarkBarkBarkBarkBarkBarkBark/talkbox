@@ -1,0 +1,59 @@
+# fly.toml — Talk Box backend
+# Deploy from this directory: cd app/backend && fly deploy
+#
+# First-time setup:
+#   1. fly postgres create --name talkbox-db --region lax
+#   2. fly postgres attach talkbox-db          # sets DATABASE_URL secret automatically
+#   3. fly secrets set \
+#        DB_URI="<postgres connection string from step 2, postgresql+psycopg://...>" \
+#        OPENAI_API_KEY="sk-..." \
+#        JWT_SECRET="$(openssl rand -hex 32)" \
+#        ADMIN_EMAIL="admin@example.com" \
+#        ADMIN_PASSWORD="changeme" \
+#        TWILIO_ACCOUNT_SID="..." \
+#        TWILIO_AUTH_TOKEN="..." \
+#        TWILIO_TWIML_APP_SID="..." \
+#        TWILIO_API_KEY_SID="..." \
+#        TWILIO_API_KEY_SECRET="..." \
+#        TWILIO_PUBLIC_URL="https://talkbox.fly.dev" \
+#        FRONTEND_URL="https://your-app.vercel.app"
+#   4. fly deploy
+
+app = 'talkbox'
+primary_region = 'lax'
+
+[build]
+  # Build context is this directory (app/backend/); Dockerfile is here too.
+  target = 'api'
+
+[env]
+  LOG_FILE = '/tmp/app.log'
+  LOG_LEVEL = 'info'
+  COOKIE_SECURE = '1'
+  KIOSK_STT_PROVIDER = 'openai'
+  LLM_PROVIDER = 'openai'
+  EMBEDDINGS_PROVIDER = 'openai'
+  EMBEDDINGS_MODEL = 'text-embedding-3-small'
+  COLLECTION_NAME = 'query_categories'
+  CORS_ORIGINS = '*'
+  KIOSK_MOCK_QUERY = 'false'
+  KIOSK_CALLING_ENABLED = 'false'
+  KIOSK_IDLE_RESET_SECONDS = '60'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 100
+    hard_limit = 200
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
