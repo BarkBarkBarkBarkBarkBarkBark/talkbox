@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
-import threading
 import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -28,8 +30,6 @@ router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 _voice_service = TwilioVoiceService()
 kiosk_call_service = KioskCallService(_voice_service)
 
-_pending_calls: dict[str, dict] = {}
-_pending_lock = threading.Lock()
 _PENDING_TTL = 90
 
 
@@ -65,21 +65,53 @@ class KioskVoiceTokenResponse(BaseModel):
     agency: str
 
 
-def _prune_pending() -> None:
-    now = time.time()
-    with _pending_lock:
-        expired = [k for k, v in _pending_calls.items() if v["expires"] < now]
-        for key in expired:
-            del _pending_calls[key]
+def _identity_secret() -> bytes:
+    secret = settings.twilio_auth_token or settings.jwt_secret
+    return secret.encode("utf-8")
 
 
-def _schedule_prune() -> None:
-    timer = threading.Timer(120, lambda: (_prune_pending(), _schedule_prune()))
-    timer.daemon = True
-    timer.start()
+def _encode_identity(to_number: str, agency: str, expires: int) -> str:
+    payload = json.dumps(
+        {"to": to_number, "agency": agency, "exp": expires},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+    signature = hmac.new(
+        _identity_secret(),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload_b64}.{signature}"
 
 
-_schedule_prune()
+def _decode_identity(identity: str) -> dict | None:
+    try:
+        payload_b64, signature = identity.split(".", 1)
+    except ValueError:
+        return None
+
+    expected = hmac.new(
+        _identity_secret(),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return None
+
+    padding = "=" * (-len(payload_b64) % 4)
+    try:
+        payload = json.loads(
+            base64.urlsafe_b64decode((payload_b64 + padding).encode("ascii")).decode(
+                "utf-8"
+            )
+        )
+    except (ValueError, json.JSONDecodeError):
+        return None
+
+    expires = int(payload.get("exp") or 0)
+    if expires < int(time.time()):
+        return None
+    return payload
 
 
 @router.post("/call/start", response_model=KioskCallResponse)
@@ -110,14 +142,7 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
     if agency is None:
         raise HTTPException(status_code=403, detail="Number not on approved call list.")
 
-    identity = str(uuid.uuid4())
-    with _pending_lock:
-        _pending_calls[identity] = {
-            "to": e164,
-            "agency": agency,
-            "expires": time.time() + _PENDING_TTL,
-        }
-
+    identity = _encode_identity(e164, agency, int(time.time()) + _PENDING_TTL)
     token = _voice_service.generate_access_token(identity=identity)
     logger.info(
         "voice token issued: identity=%s agency=%s to=%s",
@@ -151,11 +176,8 @@ async def kiosk_call_twiml(request: Request) -> Response:
         return Response(status_code=403)
     from_raw = str(form.get("From", "") or request.query_params.get("identity", ""))
     identity_key = from_raw.replace("client:", "").strip()
-
-    with _pending_lock:
-        pending = _pending_calls.get(identity_key)
-
-    if not pending or pending["expires"] < time.time():
+    pending = _decode_identity(identity_key)
+    if pending is None:
         logger.warning("twiml webhook: unknown/expired identity=%r", identity_key)
         vr = VoiceResponse()
         vr.say("This call could not be connected.")
