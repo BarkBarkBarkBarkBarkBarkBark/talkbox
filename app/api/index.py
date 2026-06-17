@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 # Serverless functions have no persistent filesystem; redirect the log file to
 # the writable /tmp directory so RotatingFileHandler doesn't crash at startup.
+# Note: /tmp is ephemeral and reset between cold-start invocations. For
+# persistent logs, configure a cloud logging service (e.g. Datadog, Logtail).
 os.environ.setdefault("LOG_FILE", "/tmp/app.log")
 
 from src.presentation.api import app  # noqa: E402, F401
