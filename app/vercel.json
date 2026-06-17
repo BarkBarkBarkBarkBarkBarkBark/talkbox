@@ -2,13 +2,20 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "api/index.py": {
+    "api/[...path].py": {
       "runtime": "@vercel/python@6.45.0",
-      "includeFiles": "{backend,database}/**"
+      "includeFiles": "{backend/src,database}/**"
+    },
+    "api/sms-query/index.py": {
+      "runtime": "@vercel/python@6.45.0",
+      "includeFiles": "{backend/src,database}/**"
+    },
+    "api/kiosk/call/[...path].py": {
+      "runtime": "@vercel/python@6.45.0",
+      "includeFiles": "backend/src/**"
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

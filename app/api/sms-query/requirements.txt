@@ -1,0 +1,2 @@
+-r ../requirements.txt
+twilio>=9.5
