@@ -176,6 +176,9 @@ async def kiosk_call_twiml(request: Request) -> Response:
     if not _twilio_signature_valid(request, dict(form)):
         logger.warning("twiml webhook: invalid Twilio signature — refusing")
         return Response(status_code=403)
+    # Twilio normally posts the browser identity in the `From` form field as
+    # `client:<identity>`. Keep the query-string fallback for local/manual
+    # debugging where a developer may call the webhook URL directly.
     from_raw = str(form.get("From", "") or request.query_params.get("identity", ""))
     identity_key = from_raw.replace("client:", "").strip()
     pending = _decode_identity(identity_key)
