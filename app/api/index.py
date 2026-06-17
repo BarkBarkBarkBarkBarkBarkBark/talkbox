@@ -11,6 +11,13 @@ from pathlib import Path
 # Make `src.*` imports work — backend/ is bundled alongside this file.
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
+# Point the Healthscout lookup at the same bundled SQLite asset Vercel ships
+# alongside this function unless an explicit override is already configured.
+os.environ.setdefault(
+    "HEALTHSCOUT_DB_PATH",
+    str(Path(__file__).parent.parent / "database" / f"{os.environ.get('DB_NAME', 'sacramento')}.db"),
+)
+
 # Serverless functions have no persistent filesystem; redirect the log file to
 # the writable /tmp directory so RotatingFileHandler doesn't crash at startup.
 # Note: /tmp is ephemeral and reset between cold-start invocations. For

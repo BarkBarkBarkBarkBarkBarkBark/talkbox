@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from pathlib import Path
 
 from src.infrastructure.config import settings
 from src.infrastructure.healthscout_agent.healthscout_db_schema import Doctor, Trasportation
@@ -15,11 +16,21 @@ class HealthScoutDB:
     def __init__(self, db_name: str | None = None):
         self.db_name = db_name or settings.db_name
 
-    def _connect(self) -> sqlite3.Connection:
-        candidate_paths = (
-            f"/data/{self.db_name}.db",
-            f"/app/database/{self.db_name}.db",
+    def _candidate_paths(self) -> tuple[str, ...]:
+        bundled_db_path = (
+            Path(__file__).resolve().parents[4] / "database" / f"{self.db_name}.db"
         )
+        configured_db_path = os.environ.get("HEALTHSCOUT_DB_PATH")
+        candidates = [
+            configured_db_path,
+            f"/data/{self.db_name}.db",
+            str(bundled_db_path),
+            f"/app/database/{self.db_name}.db",
+        ]
+        return tuple(path for path in candidates if path)
+
+    def _connect(self) -> sqlite3.Connection:
+        candidate_paths = self._candidate_paths()
         for db_path in candidate_paths:
             if os.path.exists(db_path):
                 return sqlite3.connect(db_path)
