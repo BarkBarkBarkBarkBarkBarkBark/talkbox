@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 import time
+import uuid
 from urllib.parse import urljoin
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -32,6 +33,7 @@ _voice_service = TwilioVoiceService()
 kiosk_call_service = KioskCallService(_voice_service)
 
 _IDENTITY_TOKEN_TTL_SECONDS = 90
+_PENDING_CALLS: dict[str, dict] = {}
 
 
 class KioskCallRequest(BaseModel):
@@ -63,6 +65,7 @@ class KioskVoiceTokenRequest(BaseModel):
 class KioskVoiceTokenResponse(BaseModel):
     token: str
     identity: str
+    route: str
     agency: str
 
 
@@ -116,6 +119,35 @@ def _decode_identity(identity: str) -> dict | None:
     return payload
 
 
+def _prune_pending_calls(now: int | None = None) -> None:
+    now = now or int(time.time())
+    expired = [identity for identity, pending in _PENDING_CALLS.items() if int(pending.get("exp") or 0) < now]
+    for identity in expired:
+        _PENDING_CALLS.pop(identity, None)
+
+
+def _store_pending_call(to_number: str, agency: str) -> str:
+    _prune_pending_calls()
+    identity = str(uuid.uuid4())
+    _PENDING_CALLS[identity] = {
+        "to": to_number,
+        "agency": agency,
+        "exp": int(time.time()) + _IDENTITY_TOKEN_TTL_SECONDS,
+    }
+    return identity
+
+
+def _resolve_pending_call(identity: str) -> dict | None:
+    _prune_pending_calls()
+    pending = _PENDING_CALLS.pop(identity, None)
+    if pending is not None:
+        return pending
+    # Backward compatibility for already-issued tokens from the older signed
+    # identity flow. New tokens use short UUID identities because Twilio Client
+    # identities are not a safe place to carry structured routing payloads.
+    return _decode_identity(identity)
+
+
 @router.post("/call/start", response_model=KioskCallResponse)
 def kiosk_call_start(payload: KioskCallRequest) -> KioskCallResponse:
     logger.info("kiosk call request: phone=%r name=%r", payload.phone, payload.name)
@@ -144,7 +176,8 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
     if agency is None:
         raise HTTPException(status_code=403, detail="Number not on approved call list.")
 
-    identity = _encode_identity(
+    identity = _store_pending_call(e164, agency)
+    route = _encode_identity(
         e164,
         agency,
         int(time.time()) + _IDENTITY_TOKEN_TTL_SECONDS,
@@ -156,7 +189,7 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
         agency,
         e164,
     )
-    return KioskVoiceTokenResponse(token=token, identity=identity, agency=agency)
+    return KioskVoiceTokenResponse(token=token, identity=identity, route=route, agency=agency)
 
 
 def _twilio_signature_valid(request: Request, form: dict) -> bool:
@@ -186,7 +219,8 @@ async def kiosk_call_twiml(request: Request) -> Response:
     # debugging where a developer may call the webhook URL directly.
     from_raw = str(form.get("From", "") or request.query_params.get("identity", ""))
     identity_key = from_raw.replace("client:", "").strip()
-    pending = _decode_identity(identity_key)
+    route_key = str(form.get("route", "") or form.get("Route", "") or "").strip()
+    pending = _decode_identity(route_key) if route_key else _resolve_pending_call(identity_key)
     if pending is None:
         logger.warning("twiml webhook: unknown/expired identity=%r", identity_key)
         vr = VoiceResponse()

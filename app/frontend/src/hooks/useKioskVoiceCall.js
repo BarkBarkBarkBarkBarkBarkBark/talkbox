@@ -74,7 +74,9 @@ export function useKioskVoiceCall({ onStatus }) {
       // to a Call object once media setup (incl. mic permission) succeeds.
       let call;
       try {
-        call = await device.connect({ params: { identity: tokenData.identity } });
+        call = await device.connect({
+          params: { identity: tokenData.identity, route: tokenData.route },
+        });
       } catch (err) {
         const message = String(err?.message || "").trim();
         const reason = /permission|denied|notallowed/i.test(message)
