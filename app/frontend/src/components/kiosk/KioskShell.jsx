@@ -35,22 +35,25 @@ function IntroHeroPanel({ keystrokes }) {
     <section className="kiosk-intro-overlay" aria-live="polite" aria-label="Welcome to TalkBox">
       <div className="kiosk-intro-panel">
         <header className="kiosk-intro-header">
-          <p className="kiosk-intro-eyebrow">Welcome to</p>
-          <h1>TalkBox</h1>
+          <div>
+            <p className="kiosk-intro-eyebrow">Welcome to</p>
+            <h1>TalkBox</h1>
+          </div>
+          <p className="kiosk-intro-header-note">Two quick paths to help</p>
         </header>
 
         <div className="kiosk-intro-grid">
           <div className="kiosk-intro-primary">
             <h2>Need shelter?</h2>
             <ol className="kiosk-intro-steps">
-              <li>Press <strong>Call 2-1-1</strong></li>
-              <li>Choose your language</li>
-              <li>Press <strong>8</strong> for shelter and housing</li>
-              <li>Ask for a <strong>Crisis assessment</strong></li>
-              <li>Tell them where you are</li>
-              <li>Tell them if you have medical needs or disabilities</li>
-              <li>Tell them if you do not have a phone</li>
-              <li>Ask how to follow up</li>
+              <li><span>Press the <strong>big blue button</strong> to call 2-1-1</span></li>
+              <li><span>Choose your language</span></li>
+              <li><span>Press <strong>8</strong> for shelter and housing</span></li>
+              <li><span>Ask for a <strong>Crisis assessment</strong></span></li>
+              <li><span>Tell them <strong>where you are</strong></span></li>
+              <li><span>Share medical needs or disabilities</span></li>
+              <li><span>Say if you do not have a phone</span></li>
+              <li><span>Ask how to follow up</span></li>
             </ol>
             <p className="kiosk-intro-note">
               Shelter may not be available today. Call 2-1-1 again when you can.
@@ -59,13 +62,27 @@ function IntroHeroPanel({ keystrokes }) {
 
           <div className="kiosk-intro-secondary">
             <h2>Need something else?</h2>
-            <p>Ask TalkBox:</p>
+            <div className="kiosk-intro-action-card kiosk-intro-action-card--white">
+              <span>Press the big white button and ask</span>
+            </div>
+            <p className="kiosk-intro-note">
+              Ask TalkBox:
+            </p>
             <ul className="kiosk-intro-prompts">
               <li>"I'm looking for food"</li>
               <li>"I'm looking for mental health services"</li>
               <li>"I need medical care"</li>
             </ul>
           </div>
+        </div>
+
+        <div className="kiosk-intro-safety-row">
+          <p className="kiosk-intro-call-note">
+            You can use this phone to call pre-approved local resources that TalkBox finds.
+          </p>
+          <p className="kiosk-intro-911-warning">
+            This phone WILL NOT CALL 911.
+          </p>
         </div>
 
         <footer className="kiosk-intro-footer">

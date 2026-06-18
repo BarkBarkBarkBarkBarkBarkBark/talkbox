@@ -434,10 +434,11 @@
   }
 
   .kiosk-intro-footer {
-    position: sticky;
-    bottom: 0;
-    padding-top: 0.25rem;
-    background: linear-gradient(180deg, hsl(218 49% 17% / 0), hsl(218 49% 17% / 0.72) 35%);
+    position: static;
+    padding: clamp(0.5rem, 1.4vh, 0.7rem) clamp(0.6rem, 2.2vw, 0.85rem);
+    border: 2px solid hsl(0 0% 100% / 0.24);
+    border-radius: var(--radius-md);
+    background: hsl(0 0% 0% / 0.22);
     font-size: clamp(1rem, 4.5vw, 1.35rem);
   }
 }
