@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./kiosk.css";
 import { useKeypadInput } from "../../hooks/useKeypadInput.js";
 import { SCREENS, TABS, useKioskStateMachine } from "../../hooks/useKioskStateMachine.js";
+import { useSingleKioskWindow } from "../../hooks/useSingleKioskWindow.js";
 import { playKeyTone } from "../../lib/keyTone.js";
 import KioskStatusBar from "./KioskStatusBar.jsx";
 import KioskFooterCommands from "./KioskFooterCommands.jsx";
@@ -29,6 +30,24 @@ function CenterMessage({ title, subtitle, spinner }) {
 // The shared kiosk surface. `demo` adds the on-screen keypad + demo badge; the
 // physical kiosk passes demo={false} and relies on the real keypad / keyboard.
 export default function KioskShell({ demo = false }) {
+  const windowLock = useSingleKioskWindow({ enabled: !demo });
+
+  if (!windowLock.isPrimary) {
+    return (
+      <div className="kiosk-root">
+        <KioskStatusBar title="Talk Box" demo={demo} mock={false} clock="" />
+        <CenterMessage
+          title="Kiosk already open"
+          subtitle="Another Talk Box window is controlling the kiosk. Close the other window, then refresh."
+        />
+      </div>
+    );
+  }
+
+  return <KioskRuntime demo={demo} />;
+}
+
+function KioskRuntime({ demo }) {
   // /demo always simulates; /kiosk places real (allowlisted) calls when the
   // backend reports calling_enabled.
   const machine = useKioskStateMachine({ fakeCall: demo });

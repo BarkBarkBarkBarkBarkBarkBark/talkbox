@@ -377,8 +377,8 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     (item) => {
       const target = item || stateRef.current.selected;
       if (!target) return;
-      const callingEnabled = Boolean(stateRef.current.config?.calling_enabled);
-      const simulated = fakeCall || !callingEnabled || !target.phone;
+      const callingDisabled = stateRef.current.config?.calling_enabled === false;
+      const simulated = fakeCall || callingDisabled || !target.phone;
       kioskApi.logEvent({
         event_type: "call_start",
         payload: { name: target.name, simulated },

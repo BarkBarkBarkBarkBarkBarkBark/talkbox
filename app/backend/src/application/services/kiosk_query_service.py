@@ -183,17 +183,18 @@ class KioskQueryService:
         items: list[dict] = []
         for idx, it in enumerate(raw_items[:MAX_ITEMS], start=1):
             phone = it.get("phone")
+            normalized_phone = re.sub(r"\D", "", str(phone)) if phone else None
             items.append(
                 {
                     "number": idx,
                     "name": it.get("name") or "Resource",
-                    "phone": re.sub(r"\D", "", str(phone)) if phone else None,
+                    "phone": normalized_phone,
                     "phone_display": _format_phone(phone),
                     "address": it.get("address"),
                     "description": _truncate(it.get("description")),
-                    # Calling is gated by a backend allowlist (added in M6). Until
-                    # then nothing is callable for real; the demo simulates it.
-                    "callable": False,
+                    # The backend call endpoint still enforces the allowlist; this
+                    # only tells clients the resource has a dialable number.
+                    "callable": bool(normalized_phone),
                 }
             )
         return items
