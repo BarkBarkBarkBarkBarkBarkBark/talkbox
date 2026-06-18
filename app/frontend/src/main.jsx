@@ -16,10 +16,12 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <BrowserRouter>
         <Toaster position="top-right" richColors closeButton theme="system" />
         <Routes>
-          {/* Kiosk surfaces: no desktop chrome (kiosk principle). */}
-          <Route path="/kiosk" element={<KioskPage />} />
+          {/* Root → production kiosk surface (no desktop chrome). */}
+          <Route path="/" element={<KioskPage />} />
+          {/* /demo → same kiosk with on-screen simulated keypad for browser demos. */}
           <Route path="/demo" element={<DemoKioskPage />} />
-          <Route path="/" element={<App />}>
+          {/* /chat → desktop routing console (admin / partner use). */}
+          <Route path="/chat" element={<App />}>
             <Route index element={<ChatPage />} />
           </Route>
         </Routes>
