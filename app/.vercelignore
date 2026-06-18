@@ -1,0 +1,17 @@
+# Prevent build-time artifacts from inflating Python function bundles
+frontend/node_modules
+frontend/.vite
+
+# Local Python envs/caches
+.venv
+venv
+__pycache__
+*.pyc
+
+# Build/runtime metadata
+.vercel
+
+# Docs and local-only tooling not needed at runtime
+docs
+scripts
+*.log
