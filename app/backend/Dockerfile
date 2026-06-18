@@ -38,7 +38,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache curl ffmpeg libpq
+RUN apk add --no-cache curl ffmpeg libpq iptables
+
+# ─── Tailscale (userspace) ───────────────────────────────────────────────────
+# Static binaries copied from the official image so the Fly machine can join the
+# tailnet and (optionally) expose the API over Tailscale Funnel — giving Twilio
+# a stable https://<hostname>.<tailnet>.ts.net webhook. Bring-up is handled by
+# docker-entrypoint.sh and is a no-op unless TS_AUTHKEY is set.
+COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscaled /usr/local/bin/tailscaled
+COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscale  /usr/local/bin/tailscale
+RUN mkdir -p /var/run/tailscale /var/lib/tailscale
 
 COPY --from=builder /app/.venv /app/.venv
 
