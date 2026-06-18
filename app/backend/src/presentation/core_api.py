@@ -7,6 +7,7 @@ from src.presentation.auth import auth_backend, fastapi_users
 from src.presentation.kiosk_core_routes import router as kiosk_router
 from src.presentation.middleware import configure_cors
 from src.presentation.query_routes import router as query_router
+from src.presentation.sms_routes import router as sms_router
 from src.presentation.schemas_user import UserCreate, UserRead, UserUpdate
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ def create_core_app() -> FastAPI:
     configure_cors(app)
     app.include_router(query_router, prefix="/api")
     app.include_router(kiosk_router, prefix="/api")
+    app.include_router(sms_router, prefix="/api")
     app.include_router(
         fastapi_users.get_auth_router(auth_backend),
         prefix="/api/auth/jwt",

@@ -9,3 +9,4 @@ psycopg[binary]>=3.2
 asyncpg>=0.30
 sqlalchemy[asyncio]>=2.0
 fastapi-users[sqlalchemy]>=14.0
+twilio>=9.5
