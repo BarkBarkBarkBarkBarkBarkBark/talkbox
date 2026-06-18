@@ -22,6 +22,200 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.kiosk-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: clamp(0.5rem, 2vh, 1rem);
+  background:
+    linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(188 58% 28%) 48%, hsl(218 49% 17%) 100%);
+  color: hsl(var(--primary-foreground));
+  text-shadow:
+    -1px -1px 0 hsl(0 0% 0% / 0.72),
+    1px -1px 0 hsl(0 0% 0% / 0.72),
+    -1px 1px 0 hsl(0 0% 0% / 0.72),
+    1px 1px 0 hsl(0 0% 0% / 0.72),
+    0 3px 7px hsl(0 0% 0% / 0.5);
+}
+
+.kiosk-intro-panel {
+  width: min(100%, 72rem);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(0.45rem, 1.5vh, 0.8rem);
+  padding: clamp(0.7rem, 2vh, 1.15rem) clamp(0.85rem, 2.5vw, 1.6rem);
+  border: 2px solid hsl(0 0% 100% / 0.28);
+  border-radius: var(--radius-lg);
+  background: hsl(0 0% 100% / 0.11);
+  box-shadow: 0 18px 42px hsl(218 49% 10% / 0.35);
+  overflow: hidden;
+  animation: kiosk-fade-in 0.2s ease-out;
+}
+
+.kiosk-intro-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.kiosk-intro-eyebrow {
+  margin: 0;
+  font-size: clamp(1.05rem, 3vh, 1.45rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.92);
+}
+
+.kiosk-intro-header h1 {
+  margin: 0;
+  font-size: clamp(3rem, 10vh, 5.75rem);
+  font-weight: 950;
+  line-height: 0.95;
+  -webkit-text-stroke: 1px hsl(0 0% 0% / 0.55);
+}
+
+.kiosk-intro-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.75fr);
+  gap: clamp(0.55rem, 1.8vw, 1.1rem);
+  overflow: hidden;
+}
+
+.kiosk-intro-primary,
+.kiosk-intro-secondary {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 1.1vh, 0.65rem);
+  padding: clamp(0.5rem, 1.5vh, 0.85rem);
+  border-radius: var(--radius-md);
+  background: hsl(0 0% 100% / 0.14);
+  overflow: auto;
+}
+
+.kiosk-intro-primary h2,
+.kiosk-intro-secondary h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 5vh, 2.55rem);
+  font-weight: 950;
+  line-height: 1.05;
+  -webkit-text-stroke: 0.5px hsl(0 0% 0% / 0.55);
+}
+
+.kiosk-intro-steps {
+  counter-reset: kiosk-intro-step;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.28rem, 0.9vh, 0.45rem) clamp(0.55rem, 1.45vw, 0.9rem);
+  margin: 0;
+  padding: 0;
+  font-size: clamp(1.02rem, 2.85vh, 1.38rem);
+  font-weight: 850;
+  line-height: 1.08;
+  list-style: none;
+}
+
+.kiosk-intro-steps li {
+  counter-increment: kiosk-intro-step;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.35rem, 1vw, 0.55rem);
+  min-height: clamp(2.15rem, 6.1vh, 3rem);
+  padding: clamp(0.25rem, 0.85vh, 0.42rem) clamp(0.4rem, 1.25vw, 0.62rem);
+  border: 2px solid hsl(0 0% 100% / 0.24);
+  border-radius: var(--radius-md);
+  background: hsl(0 0% 100% / 0.16);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.18);
+}
+
+.kiosk-intro-steps li::before {
+  content: counter(kiosk-intro-step);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.7rem, 4.8vh, 2.25rem);
+  height: clamp(1.7rem, 4.8vh, 2.25rem);
+  border-radius: 9999px;
+  background: hsl(var(--warning));
+  color: hsl(var(--warning-foreground));
+  font-size: clamp(1.05rem, 2.8vh, 1.35rem);
+  font-weight: 950;
+  text-shadow: none;
+  box-shadow: 0 2px 5px hsl(0 0% 0% / 0.32);
+}
+
+.kiosk-intro-note,
+.kiosk-intro-secondary p {
+  margin: 0;
+  font-size: clamp(1rem, 2.8vh, 1.28rem);
+  font-weight: 850;
+  line-height: 1.16;
+  color: hsl(0 0% 100% / 0.96);
+}
+
+.kiosk-intro-note {
+  padding: clamp(0.35rem, 1.1vh, 0.55rem) clamp(0.5rem, 1.4vw, 0.7rem);
+  border-left: 4px solid hsl(var(--warning));
+  background: hsl(0 0% 0% / 0.18);
+}
+
+.kiosk-intro-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.32rem, 1.05vh, 0.58rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kiosk-intro-prompts li {
+  padding: clamp(0.4rem, 1.25vh, 0.62rem) clamp(0.5rem, 1.5vw, 0.75rem);
+  border: 2px solid hsl(0 0% 100% / 0.24);
+  border-radius: var(--radius-md);
+  background: hsl(0 0% 100% / 0.16);
+  font-size: clamp(1.08rem, 3.15vh, 1.45rem);
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.kiosk-intro-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: clamp(1.05rem, 3vh, 1.35rem);
+  font-weight: 950;
+  color: hsl(0 0% 100% / 0.98);
+}
+
+.kiosk-intro-progress {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 0.45rem;
+}
+
+.kiosk-intro-progress span {
+  width: clamp(0.8rem, 2.4vh, 1rem);
+  height: clamp(0.8rem, 2.4vh, 1rem);
+  border-radius: 9999px;
+  border: 2px solid hsl(0 0% 100% / 0.82);
+  background: transparent;
+}
+
+.kiosk-intro-progress span.is-filled {
+  background: hsl(var(--warning));
+  border-color: hsl(var(--warning));
+}
+
 .kiosk-status {
   flex: 0 0 auto;
   display: flex;
@@ -82,8 +276,8 @@
   border-radius: var(--radius-md);
   background: hsl(var(--card));
   color: hsl(var(--muted-foreground));
-  font-size: clamp(0.9rem, 2.2vh, 1.1rem);
-  font-weight: 600;
+  font-size: clamp(1.05rem, 2.8vh, 1.3rem);
+  font-weight: 800;
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
@@ -105,8 +299,8 @@
   border-radius: 0.35em;
   background: hsl(var(--muted) / 0.6);
   color: hsl(var(--foreground));
-  font-size: 0.85em;
-  font-weight: 800;
+  font-size: 1em;
+  font-weight: 900;
 }
 
 .kiosk-tab.is-active .kiosk-tab-key {
@@ -196,9 +390,9 @@
 }
 
 .kiosk-ask-card-status {
-  font-size: clamp(0.85rem, 2.2vh, 1.15rem);
-  font-weight: 500;
-  opacity: 0.85;
+  font-size: clamp(1.05rem, 2.8vh, 1.35rem);
+  font-weight: 750;
+  opacity: 0.95;
   max-width: 30ch;
 }
 
@@ -243,8 +437,8 @@
 }
 
 .kiosk-dial-label {
-  font-size: clamp(0.95rem, 2.4vh, 1.2rem);
-  font-weight: 700;
+  font-size: clamp(1.1rem, 2.9vh, 1.4rem);
+  font-weight: 850;
   color: hsl(var(--foreground));
 }
 
@@ -255,7 +449,8 @@
 }
 
 .kiosk-dial-hint {
-  font-size: clamp(0.75rem, 1.6vh, 0.9rem);
+  font-size: clamp(1rem, 2.45vh, 1.2rem);
+  font-weight: 700;
   color: hsl(var(--muted-foreground));
   margin: 0;
 }
@@ -305,8 +500,8 @@
   border-radius: var(--radius-md);
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
-  font-size: clamp(0.85rem, 2.1vh, 1.05rem);
-  font-weight: 600;
+  font-size: clamp(1rem, 2.65vh, 1.25rem);
+  font-weight: 800;
   cursor: pointer;
   transition: border-color 0.12s ease, opacity 0.12s ease;
 }
@@ -334,7 +529,8 @@
 /* Echo of the asked question above results. */
 .kiosk-asked {
   margin: 0 0 clamp(0.35rem, 1.2vh, 0.6rem);
-  font-size: clamp(0.85rem, 2vh, 1.05rem);
+  font-size: clamp(1rem, 2.45vh, 1.25rem);
+  font-weight: 700;
   color: hsl(var(--muted-foreground));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -359,7 +555,8 @@
 }
 
 .kiosk-subtitle {
-  font-size: clamp(0.95rem, 2.4vh, 1.25rem);
+  font-size: clamp(1.1rem, 2.9vh, 1.45rem);
+  font-weight: 700;
   color: hsl(var(--muted-foreground));
   margin: 0 0 clamp(0.75rem, 2.5vh, 1.25rem);
 }
@@ -417,13 +614,14 @@
 }
 
 .kiosk-row-title {
-  font-size: clamp(1rem, 2.6vh, 1.35rem);
-  font-weight: 600;
+  font-size: clamp(1.12rem, 3vh, 1.55rem);
+  font-weight: 800;
   line-height: 1.15;
 }
 
 .kiosk-row-meta {
-  font-size: clamp(0.8rem, 2vh, 1rem);
+  font-size: clamp(1rem, 2.45vh, 1.22rem);
+  font-weight: 650;
   color: hsl(var(--muted-foreground));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -437,8 +635,8 @@
 .kiosk-row-phone {
   flex: 0 0 auto;
   margin-left: auto;
-  font-size: clamp(0.85rem, 2.1vh, 1.05rem);
-  font-weight: 700;
+  font-size: clamp(1rem, 2.55vh, 1.25rem);
+  font-weight: 850;
   font-variant-numeric: tabular-nums;
   color: hsl(var(--primary));
   white-space: nowrap;
@@ -453,8 +651,8 @@
   gap: 0.4rem;
   padding: clamp(0.4rem, 1.4vh, 0.7rem);
   border-radius: var(--radius-md);
-  font-size: clamp(0.8rem, 2vh, 1.05rem);
-  font-weight: 600;
+  font-size: clamp(1rem, 2.55vh, 1.25rem);
+  font-weight: 850;
   background: hsl(var(--card));
   border: 2px solid hsl(var(--border));
 }
@@ -568,8 +766,8 @@
   gap: 0.35rem;
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
-  font-size: clamp(0.7rem, 1.8vh, 0.9rem);
-  font-weight: 700;
+  font-size: clamp(1.05rem, 2.55vh, 1.25rem);
+  font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }

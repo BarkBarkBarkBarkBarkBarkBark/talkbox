@@ -14,6 +14,8 @@ import KioskResourceDetail from "./KioskResourceDetail.jsx";
 import { KioskCallActive, KioskCallConfirm } from "./KioskCallScreen.jsx";
 import SimulatedKeypad from "./SimulatedKeypad.jsx";
 
+const INTRO_KEYSTROKES_TO_DISMISS = 2;
+
 function CenterMessage({ title, subtitle, spinner }) {
   return (
     <div className="kiosk-content">
@@ -23,6 +25,59 @@ function CenterMessage({ title, subtitle, spinner }) {
         {subtitle ? <p className="kiosk-subtitle">{subtitle}</p> : null}
       </div>
     </div>
+  );
+}
+
+function IntroHeroPanel({ keystrokes }) {
+  const remaining = Math.max(0, INTRO_KEYSTROKES_TO_DISMISS - keystrokes);
+
+  return (
+    <section className="kiosk-intro-overlay" aria-live="polite" aria-label="Welcome to TalkBox">
+      <div className="kiosk-intro-panel">
+        <header className="kiosk-intro-header">
+          <p className="kiosk-intro-eyebrow">Welcome to</p>
+          <h1>TalkBox</h1>
+        </header>
+
+        <div className="kiosk-intro-grid">
+          <div className="kiosk-intro-primary">
+            <h2>Need shelter?</h2>
+            <ol className="kiosk-intro-steps">
+              <li>Press <strong>Call 2-1-1</strong></li>
+              <li>Choose your language</li>
+              <li>Press <strong>8</strong> for shelter and housing</li>
+              <li>Ask for a <strong>Crisis assessment</strong></li>
+              <li>Tell them where you are</li>
+              <li>Tell them if you have medical needs or disabilities</li>
+              <li>Tell them if you do not have a phone</li>
+              <li>Ask how to follow up</li>
+            </ol>
+            <p className="kiosk-intro-note">
+              Shelter may not be available today. Call 2-1-1 again when you can.
+            </p>
+          </div>
+
+          <div className="kiosk-intro-secondary">
+            <h2>Need something else?</h2>
+            <p>Ask TalkBox:</p>
+            <ul className="kiosk-intro-prompts">
+              <li>"I'm looking for food"</li>
+              <li>"I'm looking for mental health services"</li>
+              <li>"I need medical care"</li>
+            </ul>
+          </div>
+        </div>
+
+        <footer className="kiosk-intro-footer">
+          <span>{remaining === 1 ? "Press any key one more time" : "Press any key twice"}</span>
+          <span className="kiosk-intro-progress" aria-hidden="true">
+            {Array.from({ length: INTRO_KEYSTROKES_TO_DISMISS }, (_, index) => (
+              <span key={index} className={index < keystrokes ? "is-filled" : ""} />
+            ))}
+          </span>
+        </footer>
+      </div>
+    </section>
   );
 }
 
@@ -42,13 +97,35 @@ export default function KioskShell({ demo = false }) {
     dialCall,
   } = machine;
   const [clock, setClock] = useState("");
+  const [introKeystrokes, setIntroKeystrokes] = useState(0);
+  const showIntro = introKeystrokes < INTRO_KEYSTROKES_TO_DISMISS;
 
   const handleKeyWithTone = useCallback((key) => {
     playKeyTone(key);
-    handleKey(key);
-  }, [handleKey]);
 
-  useKeypadInput(handleKeyWithTone, { enabled: true });
+    if (showIntro) {
+      setIntroKeystrokes((count) => Math.min(INTRO_KEYSTROKES_TO_DISMISS, count + 1));
+      return;
+    }
+
+    handleKey(key);
+  }, [handleKey, showIntro]);
+
+  useKeypadInput(handleKeyWithTone, { enabled: !showIntro });
+
+  useEffect(() => {
+    if (!showIntro) return undefined;
+
+    function countIntroKey(e) {
+      if (e.repeat) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIntroKeystrokes((count) => Math.min(INTRO_KEYSTROKES_TO_DISMISS, count + 1));
+    }
+
+    window.addEventListener("keydown", countIntroKey, true);
+    return () => window.removeEventListener("keydown", countIntroKey, true);
+  }, [showIntro]);
 
   useEffect(() => {
     const tick = () => {
@@ -154,6 +231,7 @@ export default function KioskShell({ demo = false }) {
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
+      {showIntro ? <IntroHeroPanel keystrokes={introKeystrokes} /> : null}
     </div>
   );
 }

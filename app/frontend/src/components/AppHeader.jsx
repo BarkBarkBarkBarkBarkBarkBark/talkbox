@@ -9,12 +9,12 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Compass className="h-4 w-4" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Compass className="h-5 w-5" />
           </div>
           <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight text-foreground">Talk Box</p>
-            <p className="text-[11px] text-muted-foreground">Shelter routing assistant</p>
+            <p className="text-base font-bold tracking-tight text-foreground">Talk Box</p>
+            <p className="text-base font-medium text-muted-foreground">Shelter routing assistant</p>
           </div>
         </div>
 
@@ -26,7 +26,7 @@ export function AppHeader() {
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
       </div>
     </header>
