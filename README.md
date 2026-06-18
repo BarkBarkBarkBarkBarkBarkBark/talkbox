@@ -12,6 +12,12 @@ phone calls placed straight from the browser via the Twilio Voice SDK.
 Outbound dialing is **allowlisted server-side** — the kiosk can only call
 known service agencies, the 211 help lines, and configured test numbers.
 
+**Entrypoint rule:** TalkBox is a kiosk-first product. The canonical public
+entrypoint is `/`, which renders the production kiosk. `/kiosk` is a
+backward-compatible alias for the same kiosk surface. `/chat` is only a
+secondary admin/partner console. Pointer/Health Scout are supporting routing
+and dataset assets, not the app identity or default user experience.
+
 ```
 ┌─────────────────────────────────────────────┐
 │   📞  Call 211 — Get Help Now               │   ← the main feature
@@ -33,7 +39,7 @@ dialing `2-1-1` on the kiosk routes to `+1 (916) 498-1000`
 | [`talkbox`](talkbox) | The CLI. `talkbox update` = git pull → rebuild → relaunch → Twilio publish → health check. |
 | [`app/`](app/) | The app: FastAPI backend, React kiosk frontend, nginx, pgvector Postgres, Docker Compose. |
 | [`app/backend/`](app/backend/) | Python 3.13 / FastAPI / SQLAlchemy / LangChain. Seeds the agency DB + embeddings on first boot. |
-| [`app/frontend/`](app/frontend/) | React 19 + Vite + Tailwind. Routes: `/kiosk` (real calls), `/demo` (simulated), `/` (desktop chat). |
+| [`app/frontend/`](app/frontend/) | React 19 + Vite + Tailwind. Routes: `/` + `/kiosk` (production kiosk), `/demo` (simulated kiosk), `/chat` (secondary admin/partner console). |
 | [`Datasets/`](Datasets/) | Reference datasets and data-source documentation. |
 | [`install.sh`](install.sh) | One-shot Pi installer (Docker, repo, `.env`, build, health). |
 | [`kiosk-setup.sh`](kiosk-setup.sh) | Turns the Pi into a fullscreen Chromium kiosk on boot. |
@@ -110,8 +116,10 @@ cp app/.env.example app/.env
 ./talkbox update
 
 # 3. Open it (loopback-only by default)
-#    Kiosk (real calls):  http://localhost:8084/kiosk
+#    Kiosk (canonical):   http://localhost:8084/
+#    Kiosk alias:         http://localhost:8084/kiosk
 #    Demo (simulated):    http://localhost:8084/demo
+#    Admin chat console:  http://localhost:8084/chat
 #    API health:          http://127.0.0.1:8085/api/health
 ```
 

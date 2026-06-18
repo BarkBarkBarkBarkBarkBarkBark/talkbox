@@ -7,6 +7,11 @@ relevant rows from the agencies/Healthscout datasets, and returns a structured
 card grid to the caller (with a markdown fallback for SMS and other flat-text
 clients).
 
+**Entrypoint rule:** the production TalkBox kiosk is the main app. `/` is the
+canonical public route and `/kiosk` is an alias to the same kiosk surface.
+`/chat` is a secondary admin/partner console. Pointer/Health Scout remain
+supporting routing/data assets, not the primary user-facing product.
+
 ---
 
 ## Monorepo layout
@@ -43,7 +48,7 @@ Talk Box/
 │   ├── Dockerfile                  multi-stage node:22 → nginx:alpine
 │   └── src/
 │       ├── components/             UI primitives (ui/*), AppHeader, ChatMessage, ResultCards, ProtectedRoute
-│       ├── pages/                  Login / Register / Chat
+│       ├── pages/                  Kiosk / DemoKiosk / Chat
 │       ├── hooks/useChat.js        chat state + API client
 │       └── lib/                    api.js (fetch wrapper), auth.jsx (context), theme.jsx, utils.js (cn)
 ├── nginx/default.conf              reverse-proxy /api → backend:8000, SPA fallback

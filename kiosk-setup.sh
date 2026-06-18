@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # kiosk-setup.sh — Configure the Pi as a captive kiosk display
-# Launches Chromium fullscreen on :8084/kiosk after Docker stack is healthy.
+# Launches Chromium fullscreen on the TalkBox kiosk entrypoint after Docker stack is healthy.
 #
 # Run once on the Pi:
 #   bash ~/talkbox/kiosk-setup.sh
@@ -16,7 +16,7 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info() { echo -e "${GREEN}[kiosk]${NC} $*"; }
 warn() { echo -e "${YELLOW}[kiosk]${NC} $*"; }
 
-KIOSK_URL="${KIOSK_URL:-http://localhost:8084/kiosk}"
+KIOSK_URL="${KIOSK_URL:-http://localhost:8084/}"
 KIOSK_USER="${SUDO_USER:-${USER}}"
 
 info "Setting up Talk Box kiosk display for user: $KIOSK_USER"
