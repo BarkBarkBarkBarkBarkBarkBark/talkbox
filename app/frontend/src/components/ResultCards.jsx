@@ -21,8 +21,8 @@ function phoneHref(raw) {
 function MetaRow({ icon: Icon, children, href }) {
   const content = (
     <>
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="text-xs leading-snug">{children}</span>
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="text-base font-medium leading-snug">{children}</span>
     </>
   );
   return href ? (
@@ -50,9 +50,9 @@ function Tags({ raw }) {
       {chips.map((t) => (
         <span
           key={t}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/70 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/70 px-2 py-1 text-base font-semibold text-foreground/80"
         >
-          <Tag className="h-2.5 w-2.5" />
+          <Tag className="h-3.5 w-3.5" />
           {t}
         </span>
       ))}
@@ -64,9 +64,9 @@ function AgencyCard({ item }) {
   return (
     <article className="group flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/50">
       <header className="space-y-1">
-        <h3 className="text-sm font-semibold leading-snug text-foreground">{item.name}</h3>
+        <h3 className="text-base font-bold leading-snug text-foreground">{item.name}</h3>
         {item.description ? (
-          <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+          <p className="line-clamp-3 text-base font-medium leading-relaxed text-muted-foreground">
             {item.description}
           </p>
         ) : null}
@@ -92,13 +92,13 @@ function DoctorCard({ item }) {
     <article className="group flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/50">
       <header className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Stethoscope className="h-3.5 w-3.5" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Stethoscope className="h-4 w-4" />
           </span>
-          <h3 className="text-sm font-semibold leading-snug text-foreground">Dr. {full}</h3>
+          <h3 className="text-base font-bold leading-snug text-foreground">Dr. {full}</h3>
         </div>
         {item.specialty ? (
-          <p className="text-xs font-medium text-primary/90">{item.specialty}</p>
+          <p className="text-base font-semibold text-primary/90">{item.specialty}</p>
         ) : null}
       </header>
 
@@ -136,7 +136,7 @@ export default function ResultCards({ results, className }) {
   return (
     <div className={cn("space-y-3", className)}>
       {results.category ? (
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wide text-muted-foreground">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
           {results.category}
           <span className="ml-auto text-muted-foreground/70">

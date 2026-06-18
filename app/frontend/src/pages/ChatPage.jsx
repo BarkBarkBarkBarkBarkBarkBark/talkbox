@@ -24,14 +24,14 @@ export default function ChatPage() {
   return (
     <div className="mx-auto flex h-[calc(100vh-56px)] max-w-3xl flex-col px-4 py-6 sm:px-6">
       <div className="mb-4">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
+        <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wide text-muted-foreground">
+          <Sparkles className="h-4 w-4 text-primary" />
           Routing console
         </div>
         <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
           Ask Talk Box
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base leading-relaxed text-muted-foreground">
           Describe the need in natural language — Talk Box will route it to the right local
           service and return contact details.
         </p>
@@ -49,7 +49,7 @@ export default function ChatPage() {
                 key={s}
                 type="button"
                 onClick={() => send(s)}
-                className="group rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-foreground shadow-sm transition hover:border-primary/60 hover:bg-secondary/60"
+                className="group rounded-xl border border-border bg-card px-4 py-3 text-left text-base font-medium leading-snug text-foreground shadow-sm transition hover:border-primary/60 hover:bg-secondary/60"
               >
                 <span className="text-muted-foreground group-hover:text-foreground">“</span>
                 {s}
@@ -60,7 +60,7 @@ export default function ChatPage() {
         ) : null}
 
         {pending ? (
-          <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3 px-1 text-base font-medium text-muted-foreground">
             <Spinner size="sm" />
             Talk Box is thinking…
           </div>
@@ -70,7 +70,7 @@ export default function ChatPage() {
 
       <div className="mt-4 pb-4">
         <ChatInput onSend={send} disabled={pending} />
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="mt-2 text-center text-base font-medium text-muted-foreground">
           Experimental — double-check important info. Avoid sharing sensitive data.
         </p>
       </div>

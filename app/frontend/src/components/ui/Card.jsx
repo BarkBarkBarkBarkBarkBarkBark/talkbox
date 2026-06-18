@@ -30,7 +30,7 @@ export const CardTitle = forwardRef(function CardTitle({ className, ...props }, 
 
 export const CardDescription = forwardRef(function CardDescription({ className, ...props }, ref) {
   return (
-    <p ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+    <p ref={ref} className={cn("text-base font-medium text-muted-foreground", className)} {...props} />
   );
 });
 

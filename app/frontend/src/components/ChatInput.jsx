@@ -41,7 +41,7 @@ export default function ChatInput({ onSend, disabled, placeholder = "Ask about s
         placeholder={placeholder}
         rows={1}
         disabled={disabled}
-        className="min-h-[40px] resize-none border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="min-h-[44px] resize-none border-0 bg-transparent px-2 py-2 text-base font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
       />
       <Button
         type="submit"
@@ -50,7 +50,7 @@ export default function ChatInput({ onSend, disabled, placeholder = "Ask about s
         aria-label="Send message"
         className="shrink-0"
       >
-        <ArrowUp className="h-4 w-4" />
+        <ArrowUp className="h-5 w-5" />
       </Button>
     </form>
   );
