@@ -17,4 +17,4 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "backend"))
 # the writable /tmp directory so RotatingFileHandler doesn't crash at startup.
 os.environ.setdefault("LOG_FILE", "/tmp/app.log")
 
-from src.presentation.api import app  # noqa: E402, F401
+from src.presentation.kiosk_call_api import app  # noqa: E402, F401

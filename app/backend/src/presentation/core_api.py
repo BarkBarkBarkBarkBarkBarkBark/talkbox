@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.presentation.auth import auth_backend, fastapi_users
+from src.presentation.kiosk_call_routes import router as kiosk_call_router
 from src.presentation.kiosk_core_routes import router as kiosk_router
 from src.presentation.middleware import configure_cors
 from src.presentation.query_routes import router as query_router
@@ -34,6 +35,7 @@ def create_core_app() -> FastAPI:
     configure_cors(app)
     app.include_router(query_router, prefix="/api")
     app.include_router(kiosk_router, prefix="/api")
+    app.include_router(kiosk_call_router, prefix="/api")
     app.include_router(sms_router, prefix="/api")
     app.include_router(
         fastapi_users.get_auth_router(auth_backend),
