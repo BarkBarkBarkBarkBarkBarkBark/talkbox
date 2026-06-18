@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # ─── Auth ─────────────────────────────────────────────────────────
     jwt_secret: str = Field(default="change-me-in-production", alias="JWT_SECRET")
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
+    # SameSite policy for the auth cookie. Use "none" (requires Secure) when the
+    # frontend and backend are served from different origins (e.g. Vercel SPA
+    # calling the Fly backend); "lax" for same-origin deployments.
+    cookie_samesite: str = Field(default="lax", alias="COOKIE_SAMESITE")
     frontend_url: str = Field(default="http://localhost:8084", alias="FRONTEND_URL")
     disable_auth: bool = Field(default=False, alias="DISABLE_AUTH")
 

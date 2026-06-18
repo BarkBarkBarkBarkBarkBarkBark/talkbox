@@ -24,7 +24,7 @@ app = 'talkbox'
 primary_region = 'lax'
 
 [build]
-  image = 'ghcr.io/la-plas-growth/talkbox-backend:main'
+  dockerfile = 'Dockerfile'
   target = 'api'
 
 [env]

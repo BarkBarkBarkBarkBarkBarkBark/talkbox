@@ -16,3 +16,11 @@ __pycache__
 docs
 scripts
 *.log
+
+# Frontend-only project: the SPA calls the Fly backend directly via
+# VITE_API_URL, so the Python serverless functions are not deployed here.
+# Excluding them avoids heavy Python bundles and broken /api/* on Vercel.
+api
+backend
+database
+nginx

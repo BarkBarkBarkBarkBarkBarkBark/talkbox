@@ -49,3 +49,4 @@ screenshots/
 
 # Heavy CSV/XLSX source dumps: csv/ is reserved for operational exports.
 csv/*
+.vercel
