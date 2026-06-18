@@ -7,8 +7,10 @@ SQL agent and the pgvector seeder use psycopg2. Here we derive an async URL
 
 from __future__ import annotations
 
+import ssl
 from datetime import datetime
 from typing import AsyncGenerator
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
@@ -19,19 +21,41 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from src.infrastructure.config import settings
 
 
-def _async_db_uri(db_uri: str) -> str:
+def _async_db_uri(db_uri: str) -> tuple[str, dict]:
+    """Return (asyncpg URL, connect_args) for the given DB_URI.
+
+    asyncpg does not accept ``sslmode`` / ``channel_binding`` as query params —
+    strip those and negotiate SSL via connect_args instead.
+    """
     if not db_uri:
         raise RuntimeError("DB_URI is not set")
+
+    # Normalise driver prefix to asyncpg.
     url = db_uri
-    if url.startswith("postgresql+asyncpg://"):
-        return url
-    if url.startswith("postgresql+psycopg://"):
-        return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgresql+psycopg2://"):
-        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return url
+    for old, new in (
+        ("postgresql+psycopg://", "postgresql+asyncpg://"),
+        ("postgresql+psycopg2://", "postgresql+asyncpg://"),
+        ("postgresql://", "postgresql+asyncpg://"),
+    ):
+        if url.startswith(old):
+            url = url.replace(old, new, 1)
+            break
+
+    # Strip params asyncpg cannot handle; detect SSL requirement.
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    needs_ssl = params.pop("sslmode", ["disable"])[0] in ("require", "verify-ca", "verify-full")
+    params.pop("channel_binding", None)
+    clean_url = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+
+    connect_args: dict = {}
+    if needs_ssl:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        connect_args["ssl"] = ctx
+
+    return clean_url, connect_args
 
 
 class Base(DeclarativeBase):
@@ -54,7 +78,8 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     )
 
 
-engine = create_async_engine(_async_db_uri(settings.db_uri), pool_pre_ping=True)
+_async_url, _connect_args = _async_db_uri(settings.db_uri)
+engine = create_async_engine(_async_url, connect_args=_connect_args, pool_pre_ping=True)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 

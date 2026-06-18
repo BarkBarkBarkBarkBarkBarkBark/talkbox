@@ -88,6 +88,7 @@ export default function KioskShell({ demo = false }) {
             voiceError={state.voiceError}
             lastTranscript={state.lastTranscript}
             speechEnabled={state.speechEnabled}
+            onKey={handleKeyWithTone}
           />
         );
       case SCREENS.LOADING:

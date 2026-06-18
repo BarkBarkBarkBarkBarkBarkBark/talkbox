@@ -19,6 +19,7 @@ export default function KioskAskHome({
   voiceError = null,
   lastTranscript = "",
   speechEnabled = true,
+  onKey,
 }) {
   const { micLevel, micReady } = useMicLevel({ enabled: speechEnabled });
 
@@ -42,7 +43,12 @@ export default function KioskAskHome({
 
   return (
     <div className="kiosk-content kiosk-ask">
-      <div className="kiosk-ask-card kiosk-ask-card--call">
+      <button
+        type="button"
+        className="kiosk-ask-card kiosk-ask-card--call"
+        onClick={() => onKey?.(String(call211Entry.key))}
+        aria-label="Call 211 help line"
+      >
         <span className="kiosk-ask-card-icon">
           <PhoneIcon />
         </span>
@@ -50,11 +56,14 @@ export default function KioskAskHome({
         <span className="kiosk-ask-card-action">
           Press <span className="kiosk-ask-card-key">{call211Entry.key}</span>
         </span>
-      </div>
+      </button>
 
-      <div
+      <button
+        type="button"
         className={`kiosk-ask-card kiosk-ask-card--talk ${isListening ? "kiosk-ask-card--active kiosk-pulse" : ""}`}
+        onClick={() => onKey?.("*")}
         aria-live="polite"
+        aria-label="Ask for something using voice"
       >
         <span className="kiosk-ask-card-icon">
           <MicIcon />
@@ -79,7 +88,7 @@ export default function KioskAskHome({
             />
           </div>
         )}
-      </div>
+      </button>
     </div>
   );
 }
