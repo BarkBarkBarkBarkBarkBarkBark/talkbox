@@ -16,8 +16,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <BrowserRouter>
         <Toaster position="top-right" richColors closeButton theme="system" />
         <Routes>
-          {/* Root → production kiosk surface (no desktop chrome). */}
+          {/* Canonical public entrypoint: production kiosk surface, no desktop chrome. */}
           <Route path="/" element={<KioskPage />} />
+          {/* Backward-compatible hardware/docs alias. It is the same production kiosk. */}
+          <Route path="/kiosk" element={<KioskPage />} />
           {/* /demo → same kiosk with on-screen simulated keypad for browser demos. */}
           <Route path="/demo" element={<DemoKioskPage />} />
           {/* /chat → desktop routing console (admin / partner use). */}

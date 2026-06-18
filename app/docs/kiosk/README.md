@@ -2,13 +2,16 @@
 
 Keypad-first, voice-assisted kiosk UX for the Talk Box resource-routing app,
 designed for a 6-inch screen driven by an ATM-style 12-key keypad. This is an
-**additive** layer: the existing web app (`/`), the `/api/query` endpoint, and
-the Twilio SMS webhook are unchanged.
+**the primary production surface**: `/` renders the kiosk, `/kiosk` is a
+backward-compatible alias, `/demo` is the simulated kiosk, and `/chat` is the
+secondary admin/partner console.
 
 ## What's implemented (this milestone set: M0–M3, M8)
 
-- **`/kiosk`** — production kiosk surface. Full-screen, no login wall, no desktop
-  header. Driven entirely by number keys (`1`–`9`, `0`, `*`, `#`).
+- **`/`** — canonical production kiosk surface. Full-screen, no login wall, no
+  desktop header. Driven entirely by number keys (`1`–`9`, `0`, `*`, `#`).
+- **`/kiosk`** — alias to the same production kiosk surface, kept for older
+  Pi setup scripts, bookmarks, and docs.
 - **`/demo`** — same UX plus an on-screen simulated keypad and a DEMO badge, for
   showing partners from any browser. Calling is always simulated here.
 - **Chat-first home** — the main surface is an open-ended "What do you need?"
@@ -40,8 +43,8 @@ the Twilio SMS webhook are unchanged.
   catalog (`kiosk_mock_catalog.json`) from the original
   legacy `Health Scout DBs/*.csv` exports (original Pointer project).
 
-Real outbound calling (Twilio Voice + an allowlist) and the admin portal are
-later milestones (M6/M7); the kiosk **cannot dial a real number** today.
+Real outbound calling runs through Twilio Voice with a server-side allowlist.
+The admin/partner chat console is intentionally separate from the kiosk.
 
 ## Key bindings
 
@@ -68,9 +71,10 @@ docker compose up --build
 
 Then open:
 
-- Kiosk: <http://localhost:8084/kiosk>
-- Demo:  <http://localhost:8084/demo>
-- Web app (unchanged): <http://localhost:8084/>
+- Kiosk canonical: <http://localhost:8084/>
+- Kiosk alias: <http://localhost:8084/kiosk>
+- Demo: <http://localhost:8084/demo>
+- Admin chat console: <http://localhost:8084/chat>
 - API health: <http://127.0.0.1:8085/api/health>
 
 The bundled `.env` defaults to a **zero-dependency demo**:
@@ -82,7 +86,7 @@ The bundled `.env` defaults to a **zero-dependency demo**:
 ```sh
 cd frontend
 npm install
-npm run dev   # http://localhost:5173/kiosk  (proxies /api to the compose backend on 127.0.0.1:8085)
+npm run dev   # http://localhost:5173/  (proxies /api to the compose backend on 127.0.0.1:8085)
 ```
 
 ## Switching to the real query pipeline
@@ -97,7 +101,7 @@ npm run dev   # http://localhost:5173/kiosk  (proxies /api to the compose backen
 
 - Same Compose stack runs on Pi OS / Debian (arm64). Build on the Pi or push
   multi-arch images.
-- The Pi is a thin terminal: a Chromium kiosk pointed at `/kiosk` on the cloud
+- The Pi is a thin terminal: a Chromium kiosk pointed at `/` on the cloud
   (or a local) backend. Autostart, health page, and heartbeat land in M9.
 - Keep `KIOSK_MOCK_QUERY` off in the field; point the device at the real backend.
 - For voice search, install `ffmpeg`, install `whisper.cpp` as

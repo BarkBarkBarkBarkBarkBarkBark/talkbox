@@ -6,6 +6,22 @@
 #               Read the whole thing before touching anything.
 ################################################################################
 
+canonical_product_rule:
+  product_name: TalkBox
+  primary_experience: production kiosk
+  canonical_public_route: /
+  kiosk_alias_route: /kiosk
+  secondary_console_route: /chat
+  routing_entry_file: app/frontend/src/main.jsx
+  kiosk_shell: app/frontend/src/components/kiosk/KioskShell.jsx
+  pointer_role: >
+    Pointer and Health Scout are supporting routing/data assets inherited from
+    the old project. Do not treat Pointer as the product name, deployment
+    target, or default frontend entrypoint. Future agents should preserve the
+    kiosk-first TalkBox entrypoint unless explicitly told otherwise.
+
+################################################################################
+
 project:
   name: TalkBox
   description: >
@@ -35,7 +51,7 @@ infrastructure:
     display: >
       LXDE desktop via raspberrypi-ui-mods. Autologin via raspi-config B4.
       Chromium opens at boot via ~/.config/autostart/kiosk.desktop.
-    kiosk_url: http://localhost:8084/kiosk
+    kiosk_url: http://localhost:8084/
     audio:
       device: MV-SILICON P10S USB conference mic/speaker (ALSA card 0)
       input: USB mic capture works via Chromium getUserMedia — permission pre-granted for localhost:8084
