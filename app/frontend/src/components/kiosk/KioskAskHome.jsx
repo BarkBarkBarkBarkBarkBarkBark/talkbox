@@ -15,11 +15,11 @@ const MicIcon = () => (
 // Ask tab: Call 211 hero + push-to-talk voice entry (key *).
 export default function KioskAskHome({
   menu,
+  onKey,
   voiceStatus = "idle",
   voiceError = null,
   lastTranscript = "",
   speechEnabled = true,
-  onKey,
 }) {
   const { micLevel, micReady } = useMicLevel({ enabled: speechEnabled });
 

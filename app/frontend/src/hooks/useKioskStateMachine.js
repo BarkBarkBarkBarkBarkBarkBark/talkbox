@@ -468,6 +468,21 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
         return;
       }
 
+      // CALL_211: the dedicated physical "Call 211" button. One press reaches
+      // the 211 help line from any screen, except an already-active call (so it
+      // can never interrupt a call in progress). 211 is a fixed, safe number,
+      // so it dials directly without a separate confirm step.
+      if (key === "CALL_211") {
+        if (s.screen === SCREENS.CALL_ACTIVE) return;
+        const item = s.fallback || {
+          name: "211 help line",
+          phone: "+19164981000",
+          phone_display: "211 (help line)",
+        };
+        startCall(item);
+        return;
+      }
+
       // CALL: the dedicated green button. Context-aware: confirms a pending
       // call, dials the entered number, calls the focused resource, or — from
       // the home screen — starts the Call 211 flow.
@@ -580,11 +595,12 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           const n = Number(key);
           if (n >= 1 && n <= 9) {
             if (n === 9) {
-              const call211 = s.menu.find((m) => m.action === "CALL_211");
-              if (call211) {
-                selectMenuEntry(call211);
-                return;
-              }
+              // 9 always reaches 211 — even if the menu config failed to load,
+              // selectMenuEntry falls back to the built-in 211 help line.
+              selectMenuEntry(
+                s.menu.find((m) => m.action === "CALL_211") || { action: "CALL_211" },
+              );
+              return;
             }
             // Digits jump straight to a numbered menu entry. This keeps the
             // beloved "press 9 to call 211" shortcut working on the Ask tab,

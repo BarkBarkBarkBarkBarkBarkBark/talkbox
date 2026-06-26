@@ -136,6 +136,19 @@
   border-radius: var(--radius-lg);
   text-align: center;
   overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  transition: filter 0.1s ease, transform 0.05s ease;
+}
+
+.kiosk-ask-card:active {
+  transform: scale(0.985);
+  filter: brightness(0.95);
+}
+
+.kiosk-ask-card:focus-visible {
+  outline: 4px solid hsl(var(--ring, var(--primary)));
+  outline-offset: 3px;
 }
 
 .kiosk-ask-card--call {

@@ -103,11 +103,11 @@ function KioskRuntime({ demo }) {
         return (
           <KioskAskHome
             menu={state.menu}
+            onKey={handleKeyWithTone}
             voiceStatus={state.voiceStatus}
             voiceError={state.voiceError}
             lastTranscript={state.lastTranscript}
             speechEnabled={state.speechEnabled}
-            onKey={handleKeyWithTone}
           />
         );
       case SCREENS.LOADING:
