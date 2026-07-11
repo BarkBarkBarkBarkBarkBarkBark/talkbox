@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.presentation.auth import auth_backend, fastapi_users
+from src.presentation.admin_routes import router as admin_router
 from src.presentation.kiosk_call_routes import router as kiosk_call_router
 from src.presentation.kiosk_core_routes import router as kiosk_router
 from src.presentation.middleware import configure_cors
@@ -37,6 +38,7 @@ def create_core_app() -> FastAPI:
     app.include_router(kiosk_router, prefix="/api")
     app.include_router(kiosk_call_router, prefix="/api")
     app.include_router(sms_router, prefix="/api")
+    app.include_router(admin_router, prefix="/api/admin")
     app.include_router(
         fastapi_users.get_auth_router(auth_backend),
         prefix="/api/auth/jwt",

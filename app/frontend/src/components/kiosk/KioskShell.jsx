@@ -29,11 +29,16 @@ function CenterMessage({ title, subtitle, spinner }) {
   );
 }
 
-function IntroHeroPanel({ keystrokes }) {
+function IntroHeroPanel({ keystrokes, onDismiss }) {
   const remaining = Math.max(0, INTRO_KEYSTROKES_TO_DISMISS - keystrokes);
 
   return (
-    <section className="kiosk-intro-overlay" aria-live="polite" aria-label="Welcome to TalkBox">
+    <section
+      className="kiosk-intro-overlay"
+      aria-live="polite"
+      aria-label="Welcome to TalkBox. Tap anywhere to start."
+      onClick={onDismiss}
+    >
       <div className="kiosk-intro-panel">
         <header className="kiosk-intro-header">
           <div>
@@ -87,7 +92,10 @@ function IntroHeroPanel({ keystrokes }) {
         </div>
 
         <footer className="kiosk-intro-footer">
-          <span>{remaining === 1 ? "Press any key one more time" : "Press any key twice"}</span>
+          <span className="kiosk-intro-key-prompt">
+            {remaining === 1 ? "Press any key one more time" : "Press any key twice"}
+          </span>
+          <span className="kiosk-intro-touch-prompt">Tap anywhere to start</span>
           <span className="kiosk-intro-progress" aria-hidden="true">
             {Array.from({ length: INTRO_KEYSTROKES_TO_DISMISS }, (_, index) => (
               <span key={index} className={index < keystrokes ? "is-filled" : ""} />
@@ -135,6 +143,10 @@ function KioskRuntime({ demo }) {
   const [clock, setClock] = useState("");
   const [introKeystrokes, setIntroKeystrokes] = useState(0);
   const showIntro = introKeystrokes < INTRO_KEYSTROKES_TO_DISMISS;
+
+  const dismissIntro = useCallback(() => {
+    setIntroKeystrokes(INTRO_KEYSTROKES_TO_DISMISS);
+  }, []);
 
   const handleKeyWithTone = useCallback((key) => {
     playKeyTone(key);
@@ -267,7 +279,7 @@ function KioskRuntime({ demo }) {
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
-      {showIntro ? <IntroHeroPanel keystrokes={introKeystrokes} /> : null}
+      {showIntro ? <IntroHeroPanel keystrokes={introKeystrokes} onDismiss={dismissIntro} /> : null}
     </div>
   );
 }

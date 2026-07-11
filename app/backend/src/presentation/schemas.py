@@ -1,4 +1,6 @@
+from datetime import datetime
 from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -53,3 +55,47 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+
+
+class AdminAgencyWrite(BaseModel):
+    agency: str = Field(min_length=1, max_length=255)
+    phone_number: str | None = Field(default=None, max_length=50)
+    address: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    insurance: str | None = Field(default=None, max_length=255)
+    knowledge_tags: str | None = None
+
+
+class AdminAgencyRead(AdminAgencyWrite):
+    id: int
+
+
+class AdminAgencyPage(BaseModel):
+    items: list[AdminAgencyRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminCategoryRead(BaseModel):
+    id: int
+    name: str
+    agency_count: int
+
+
+class AdminImportPreview(BaseModel):
+    id: int
+    filename: str
+    status: Literal["previewed", "published", "discarded"]
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    errors: list[dict] = Field(default_factory=list)
+    created_at: datetime
+
+
+class AdminImportRow(BaseModel):
+    row_number: int
+    data: AdminAgencyWrite | None = None
+    errors: list[str] = Field(default_factory=list)

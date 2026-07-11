@@ -300,6 +300,10 @@
   color: hsl(0 0% 100% / 0.98);
 }
 
+.kiosk-intro-touch-prompt {
+  display: none;
+}
+
 .kiosk-intro-progress {
   flex: 0 0 auto;
   display: inline-flex;
@@ -329,7 +333,8 @@
     width: 100%;
     height: 100%;
     max-height: 100%;
-    grid-template-rows: auto auto auto auto;
+    display: flex;
+    flex-direction: column;
     gap: clamp(0.55rem, 1.2vh, 0.8rem);
     padding: clamp(0.7rem, 2.4vw, 1rem);
     overflow-x: hidden;
@@ -337,6 +342,7 @@
   }
 
   .kiosk-intro-header {
+    flex: 0 0 auto;
     align-items: stretch;
     flex-direction: column;
     gap: clamp(0.45rem, 1vh, 0.65rem);
@@ -362,7 +368,9 @@
 
   .kiosk-intro-grid,
   .kiosk-intro-safety-row {
-    grid-template-columns: minmax(0, 1fr);
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
     gap: clamp(0.55rem, 1.4vh, 0.8rem);
     overflow: visible;
   }
@@ -434,12 +442,21 @@
   }
 
   .kiosk-intro-footer {
+    flex: 0 0 auto;
     position: static;
     padding: clamp(0.5rem, 1.4vh, 0.7rem) clamp(0.6rem, 2.2vw, 0.85rem);
     border: 2px solid hsl(0 0% 100% / 0.24);
     border-radius: var(--radius-md);
     background: hsl(0 0% 0% / 0.22);
     font-size: clamp(1rem, 4.5vw, 1.35rem);
+  }
+
+  .kiosk-intro-key-prompt {
+    display: none;
+  }
+
+  .kiosk-intro-touch-prompt {
+    display: inline;
   }
 }
 

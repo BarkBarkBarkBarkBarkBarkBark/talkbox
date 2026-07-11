@@ -67,8 +67,26 @@ def run_seed_agencies(csv_path: Path | None = None) -> tuple[int, int]:
     return cats, agencies
 
 
+def agencies_are_seeded() -> bool:
+    from src.infrastructure.config import settings
+    from src.infrastructure.db import to_sync_dsn
+
+    if not settings.db_uri:
+        return False
+
+    import psycopg
+
+    try:
+        with psycopg.connect(to_sync_dsn(settings.db_uri)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT EXISTS (SELECT 1 FROM agencies)")
+                return bool(cur.fetchone()[0])
+    except psycopg.errors.UndefinedTable:
+        return False
+
+
 def run_seed() -> None:
-    """Full bootstrap: alembic + vector seeds + agencies seeds."""
+    """Bootstrap migrations and seeds without overwriting published resources."""
     run_migrate()
 
     from src.infrastructure.seeds.vector_seeder import seed_query_categories
@@ -76,7 +94,10 @@ def run_seed() -> None:
     n = seed_query_categories()
     logging.getLogger("talkbox.seed").info("vector seed complete: %d documents", n)
 
-    run_seed_agencies()
+    if agencies_are_seeded():
+        logging.getLogger("talkbox.seed").info("agency seed skipped: live resources already exist")
+    else:
+        run_seed_agencies()
 
 
 def main() -> None:

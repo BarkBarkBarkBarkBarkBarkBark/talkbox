@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 
 import App from "./App.jsx";
 import { ThemeProvider } from "./lib/theme.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
 import ChatPage from "./pages/ChatPage.jsx";
 import DemoKioskPage from "./pages/DemoKioskPage.jsx";
 import KioskPage from "./pages/KioskPage.jsx";
@@ -22,6 +23,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/kiosk" element={<KioskPage />} />
           {/* /demo → same kiosk with on-screen simulated keypad for browser demos. */}
           <Route path="/demo" element={<DemoKioskPage />} />
+          {/* Secondary, superuser-only resource operations console. */}
+          <Route path="/admin" element={<AdminPage />} />
           {/* /chat → desktop routing console (admin / partner use). */}
           <Route path="/chat" element={<App />}>
             <Route index element={<ChatPage />} />
