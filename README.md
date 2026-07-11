@@ -77,6 +77,23 @@ request, transcribe it, and run the normal semantic search. **During a live call
 every keypad key is sent as a DTMF tone** (so
 "press 0 for an operator" works); only `HANGUP` ends the call.
 
+### Arcade buttons (physical kiosk)
+
+The physical kiosk has seven arcade buttons. A small host-side bridge
+(`~/.local/bin/talkbox-button-bridge`, started at login) reads the USB encoder
+and re-emits keystrokes the kiosk already understands, so the buttons and the
+keyboard/keypad stay in sync.
+
+| Button | Action | Kiosk key |
+| --- | --- | --- |
+| **K1** | Call 211 | `CALL_211` (≡ `9` on home) |
+| **K2** | Talk — ask a question by voice | `*` |
+| **K3** | Call / Enter (confirm + select) | `CALL` / `#` |
+| **K4** | Hang up / Exit (back) | `HANGUP` / Back |
+| **L1** | Move highlight up | `PREV` |
+| **R1** | Move highlight down | `NEXT` |
+| **L2** | Toggle screen (cycle Ask → Browse → Dial) | `CYCLE_TAB` |
+
 ## The `talkbox` CLI
 
 ```bash
