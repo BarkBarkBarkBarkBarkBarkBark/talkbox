@@ -14,6 +14,8 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    # Bounded for the 2 GB Pi: a runaway process must never OOM the whole kiosk.
+    mem_limit: 256m
     networks:
       - talkbox-network
 
@@ -35,6 +37,7 @@ services:
       talkbox-postgres:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: 768m
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
       interval: 15s
@@ -60,6 +63,7 @@ services:
       talkbox-backend:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: 64m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ > /dev/null || exit 1"]
       interval: 30s

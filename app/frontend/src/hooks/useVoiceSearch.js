@@ -3,6 +3,18 @@ import { kioskApi } from "../lib/kioskApi.js";
 
 const MIME_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
 
+// Explicit processing constraints: the kiosk mic (TONOR) and speaker (P10S)
+// are separate devices, so the speakerphone's hardware echo cancellation
+// never applies to the mic path — always ask the browser for software
+// AEC / noise suppression / auto gain on every capture.
+const MIC_CONSTRAINTS = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+};
+
 function chooseMimeType() {
   if (!window.MediaRecorder) return "";
   return MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || "";
@@ -26,7 +38,7 @@ export function useMicLevel({ enabled = true } = {}) {
 
     const start = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -138,7 +150,7 @@ export function useVoiceSearch({ maxSeconds = 6, enabled = true } = {}) {
     setVoiceStatus("requesting-permission");
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
       streamRef.current = stream;
       const mimeType = chooseMimeType();
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);

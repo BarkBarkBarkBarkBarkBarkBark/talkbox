@@ -26,6 +26,10 @@ async function request(path, opts = {}) {
 export const kioskApi = {
   config: () => request("/api/kiosk/config"),
 
+  // Lightweight liveness probe with a hard timeout so a dead backend is
+  // detected instead of hanging fetches piling up.
+  health: () => request("/api/health", { signal: AbortSignal.timeout(5000) }),
+
   query: (q) =>
     request("/api/kiosk/query", {
       method: "POST",

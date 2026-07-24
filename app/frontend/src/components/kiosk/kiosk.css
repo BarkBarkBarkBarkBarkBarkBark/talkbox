@@ -501,6 +501,71 @@
   }
 }
 
+/* ───── Appliance guard overlays + hardware banner ───── */
+.kiosk-alert-banner {
+  flex: 0 0 auto;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-weight: 700;
+  background: #7f1d1d;
+  color: #fff;
+  font-size: clamp(0.9rem, 2.5vh, 1.2rem);
+}
+
+.kiosk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  padding: clamp(1rem, 5vw, 3rem);
+  background: hsl(var(--background) / 0.96);
+}
+
+.kiosk-overlay-presence {
+  z-index: 50;
+  background: hsl(var(--background) / 0.92);
+}
+
+.kiosk-presence-action {
+  font-size: clamp(1.2rem, 4vh, 2rem);
+  font-weight: 700;
+}
+
+.kiosk-presence-action kbd {
+  padding: 0.15em 0.6em;
+  border-radius: 0.35em;
+  border: 2px solid hsl(var(--foreground) / 0.5);
+}
+
+.kiosk-overlay-dim {
+  z-index: 60;
+  background: #000;
+  cursor: none;
+  justify-content: flex-end;
+  padding-bottom: 12vh;
+}
+
+.kiosk-dim-hint {
+  color: rgb(255 255 255 / 0.35);
+  font-size: clamp(1rem, 3vh, 1.5rem);
+  animation: kiosk-dim-pulse 6s ease-in-out infinite;
+}
+
+@keyframes kiosk-dim-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* ───── Home tabs (Ask / Browse) ───── */
 .kiosk-tabs {
   flex: 0 0 auto;

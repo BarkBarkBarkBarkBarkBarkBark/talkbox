@@ -69,6 +69,17 @@ export function useKioskVoiceCall({ onStatus }) {
         updateStatus("failed", err?.message || "Device error.");
       });
 
+      // Observability: if the USB mic/speaker set changes mid-call (unplug,
+      // hub reset) Twilio's AudioHelper notices before we do — log it so
+      // field problems show up in the event stream.
+      try {
+        device.audio?.on("deviceChange", () => {
+          kioskApi.logEvent({ event_type: "call_audio_device_change" });
+        });
+      } catch {
+        // AudioHelper unavailable — non-fatal
+      }
+
       // Voice SDK v2: outgoing calls connect directly — no registration needed
       // (registration is only required to *receive* calls). connect() resolves
       // to a Call object once media setup (incl. mic permission) succeeds.

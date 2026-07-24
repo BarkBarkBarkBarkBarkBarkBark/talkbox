@@ -15,6 +15,7 @@ import { useEffect } from "react";
 //   Enter / NumpadEnter        -> "#"           (OK: open highlighted item / place call)
 //   Backspace                  -> "BS"          (Back: delete a dialed digit, else step back)
 //   Escape                     -> "BS"          (Back, for keyboard testers)
+//   Tab                        -> "STILL_HERE"  (answers "are you still there?" during a call)
 //   F2                         -> "CALL_211"    (dedicated physical "Call 211" button)
 //   "c" / "C"                  -> "CALL"        (dev shortcut: confirm / place call)
 //   "h" / "H"                  -> "HANGUP"      (dev shortcut: same as Backspace on a call)
@@ -46,6 +47,7 @@ function normalize(e) {
   if (k === "+") return "NEXT";
   if (k === "Escape") return "BS";
   if (k === "Backspace") return "BS";
+  if (k === "Tab") return "STILL_HERE";
   if (k === "F2") return "CALL_211";
   if (k === "c" || k === "C") return "CALL";
   if (k === "h" || k === "H") return "HANGUP";
@@ -66,8 +68,9 @@ export function useKeypadInput(onKey, { enabled = true } = {}) {
 
       // When typing, let the field handle text entry. Escape and star remain
       // kiosk commands so users can back out or start voice search from Ask.
-      // F2 (the physical Call 211 button) must always reach the kiosk.
-      if (typing && e.key !== "Escape" && e.key !== "*" && e.key !== "/" && e.key !== "F2") return;
+      // F2 (the physical Call 211 button) must always reach the kiosk, and Tab
+      // is always the "I'm still here" answer (kiosk has no focus traversal).
+      if (typing && e.key !== "Escape" && e.key !== "*" && e.key !== "/" && e.key !== "F2" && e.key !== "Tab") return;
 
       const mapped = normalize(e);
       if (!mapped) return;
