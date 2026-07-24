@@ -55,3 +55,30 @@ export function playKeyTone(key) {
 
   osc.onended = () => ctx.close();
 }
+
+// Louder two-note chime for the "are you still there?" call-presence warning.
+// Deliberately distinct from keypress beeps so it reads as an alert, and loud
+// enough to be heard by someone standing a step away from the kiosk.
+export function playAlertTone() {
+  let ctx;
+  try {
+    ctx = new AudioContext();
+  } catch {
+    return;
+  }
+  const now = ctx.currentTime;
+  [[880, 0], [660, 0.18]].forEach(([freq, at]) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now + at);
+    gain.gain.setValueAtTime(0, now + at);
+    gain.gain.linearRampToValueAtTime(0.4, now + at + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now + at);
+    osc.stop(now + at + 0.17);
+  });
+  setTimeout(() => ctx.close().catch(() => {}), 600);
+}

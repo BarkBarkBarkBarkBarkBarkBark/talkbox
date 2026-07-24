@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { kioskApi } from "../lib/kioskApi.js";
+import { playAlertTone } from "../lib/keyTone.js";
 import { cancelSpeech, speak } from "../lib/tts.js";
 import { useKioskVoiceCall } from "./useKioskVoiceCall.js";
 import { useVoiceSearch } from "./useVoiceSearch.js";
@@ -80,6 +81,8 @@ const initialState = {
   callStatus: "idle", // idle | connecting | connected | ended | failed
   callSimulated: true,
   callReason: null,
+  // "Are you still there?" warning level during a live call: 0 (none), 1, 2.
+  callAttention: 0,
 };
 
 function reducer(state, action) {
@@ -100,7 +103,7 @@ function reducer(state, action) {
       return { ...state, cursor: next };
     }
     case "GO_HOME":
-      return { ...state, screen: SCREENS.ASK_HOME, callStatus: "idle", error: null };
+      return { ...state, screen: SCREENS.ASK_HOME, callStatus: "idle", callAttention: 0, error: null };
     case "DIAL_APPEND":
       if (state.dialNumber.length >= MAX_DIAL_DIGITS) return state;
       return { ...state, dialNumber: state.dialNumber + action.digit };
@@ -135,12 +138,15 @@ function reducer(state, action) {
         callSimulated: action.simulated ?? state.callSimulated,
         callReason: action.reason ?? null,
       };
+    case "CALL_ATTENTION":
+      return { ...state, callAttention: action.level };
     case "BACK_TO_RESULTS":
       // From a dial-pad or 211 call there may be no results to return to.
       return {
         ...state,
         screen: state.items.length ? SCREENS.RESULTS_LIST : SCREENS.ASK_HOME,
         callStatus: "idle",
+        callAttention: 0,
       };
     case "ERROR":
       return { ...state, screen: SCREENS.ERROR, error: action.error };
@@ -410,6 +416,54 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     dispatch({ type: "BACK_TO_RESULTS" });
   }, [voiceCall]);
 
+  // ─── In-call presence watchdog ("are you still there?") ─────────────
+  // A caller who walks away mid-hold would otherwise tie up the kiosk (and
+  // the far-end line) indefinitely. After a period with no keypad activity
+  // during a live call, beep + show a warning; a second warning follows, and
+  // then the call is ended. Tab (STILL_HERE) or any key confirms presence.
+  const presenceTimer = useRef(null);
+
+  const clearPresenceTimer = useCallback(() => {
+    if (presenceTimer.current) {
+      clearTimeout(presenceTimer.current);
+      presenceTimer.current = null;
+    }
+  }, []);
+
+  const raisePresenceWarning = useCallback(
+    (level) => {
+      if (stateRef.current.screen !== SCREENS.CALL_ACTIVE) return;
+      if (level > 2) {
+        kioskApi.logEvent({
+          event_type: "call_auto_hangup",
+          payload: { reason: "unattended" },
+        });
+        hangUp();
+        dispatch({ type: "RESET" });
+        return;
+      }
+      playAlertTone();
+      dispatch({ type: "CALL_ATTENTION", level });
+      kioskApi.logEvent({ event_type: "call_presence_warning", payload: { level } });
+      presenceTimer.current = setTimeout(() => raisePresenceWarning(level + 1), 45_000);
+    },
+    [hangUp],
+  );
+
+  const armPresenceTimer = useCallback(() => {
+    clearPresenceTimer();
+    if (stateRef.current.screen !== SCREENS.CALL_ACTIVE) return;
+    if (stateRef.current.callAttention) dispatch({ type: "CALL_ATTENTION", level: 0 });
+    const warnSecs = stateRef.current.config?.call_idle_warn_seconds || 300;
+    presenceTimer.current = setTimeout(() => raisePresenceWarning(1), warnSecs * 1000);
+  }, [clearPresenceTimer, raisePresenceWarning]);
+
+  useEffect(() => {
+    if (state.screen === SCREENS.CALL_ACTIVE) armPresenceTimer();
+    else clearPresenceTimer();
+    return clearPresenceTimer;
+  }, [state.screen, armPresenceTimer, clearPresenceTimer]);
+
   const reset = useCallback(() => {
     cancelSpeech();
     if (callTimer.current) clearTimeout(callTimer.current);
@@ -441,7 +495,13 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     (key) => {
       armIdleTimer();
       const s = stateRef.current;
+      // Any key during a live call proves someone is present.
+      if (s.screen === SCREENS.CALL_ACTIVE) armPresenceTimer();
       kioskApi.logEvent({ event_type: "keypress", session_id: undefined, payload: { key, screen: s.screen } });
+
+      // STILL_HERE (Tab / screen tap): exists only to answer the "are you
+      // still there?" prompt — it must never dial, navigate, or send DTMF.
+      if (key === "STILL_HERE") return;
 
       // Backspace: on the dial pad deletes a digit; during a call ends the call;
       // otherwise steps back one screen. 0 is always just the number 0.
@@ -706,6 +766,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     [
       announce,
       armIdleTimer,
+      armPresenceTimer,
       dialCall,
       hangUp,
       runQuery,

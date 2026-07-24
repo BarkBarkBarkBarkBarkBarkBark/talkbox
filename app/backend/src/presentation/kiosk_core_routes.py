@@ -57,6 +57,8 @@ class KioskConfigResponse(BaseModel):
     calling_enabled: bool
     speech_enabled: bool
     speech_max_seconds: int
+    call_idle_warn_seconds: int
+    screen_dim_seconds: int
     menu: list[KioskMenuItem]
 
 
@@ -126,6 +128,8 @@ def kiosk_config() -> KioskConfigResponse:
         calling_enabled=settings.kiosk_calling_enabled,
         speech_enabled=settings.kiosk_stt_enabled,
         speech_max_seconds=settings.kiosk_stt_max_seconds,
+        call_idle_warn_seconds=settings.kiosk_call_idle_warn_seconds,
+        screen_dim_seconds=settings.kiosk_screen_dim_seconds,
         menu=[KioskMenuItem(**m) for m in _HOME_MENU],
     )
 

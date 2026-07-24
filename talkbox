@@ -311,6 +311,145 @@ cmd_logs() {
     docker logs -f --tail 100 "${1:-talkbox-backend}"
 }
 
+AUDIO_STATE="/run/talkbox-audio.state"
+
+audio_state_val() { grep -E "^$1=" "$AUDIO_STATE" 2>/dev/null | head -1 | cut -d= -f2; }
+
+cmd_audio() {
+    banner
+    echo -e "${BOLD}Sound cards${NC}"
+    if [ -r /proc/asound/cards ]; then
+        sed 's/^/  /' /proc/asound/cards
+    else
+        warn "no ALSA cards visible"
+    fi
+
+    echo ""
+    echo -e "${BOLD}Pinned routing${NC} ${DIM}(${AUDIO_STATE})${NC}"
+    if [ -f "$AUDIO_STATE" ]; then
+        sed 's/^/  /' "$AUDIO_STATE"
+        local degraded; degraded="$(audio_state_val DEGRADED)"
+        if [ "$degraded" = "no" ]; then
+            ok "expected mic (TONOR) + speaker (P10S) resolved"
+        else
+            warn "audio is in a degraded/fallback state: $degraded"
+        fi
+    else
+        warn "state file missing — run: sudo talkbox-audio-init (or reboot)"
+    fi
+
+    echo ""
+    if [ "${1:-}" = "test" ]; then
+        echo -e "${BOLD}Speaker test${NC} — you should hear 'front center' once..."
+        if timeout 8 speaker-test -D default -c 1 -t wav -l 1 >/dev/null 2>&1; then
+            ok "speaker test played"
+        else
+            warn "speaker test failed — check speaker cabling / talkbox doctor"
+        fi
+        echo -e "${BOLD}Mic loopback${NC} — speak now (3 seconds)..."
+        local wav=/tmp/talkbox-mic-test.wav
+        if timeout 8 arecord -D default -f S16_LE -r 16000 -d 3 "$wav" >/dev/null 2>&1; then
+            ok "recorded 3s — playing it back"
+            timeout 8 aplay -D default "$wav" >/dev/null 2>&1 || warn "playback of recording failed"
+        else
+            warn "mic recording failed"
+        fi
+        rm -f "$wav"
+    else
+        note "run 'talkbox audio test' for a speaker + microphone loopback test"
+    fi
+    echo ""
+}
+
+cmd_doctor() {
+    banner
+    local problems=0
+
+    echo -e "${BOLD}Containers${NC}"
+    docker ps --filter "name=talkbox-" --format "  {{.Names}}\t{{.Status}}" 2>/dev/null || true
+    local c
+    for c in talkbox-postgres talkbox-backend talkbox-frontend; do
+        if ! docker ps --filter "name=$c" --format '{{.Status}}' 2>/dev/null | grep -q 'Up'; then
+            warn "$c is not running"
+            problems=$((problems + 1))
+        fi
+    done
+
+    echo ""
+    echo -e "${BOLD}Health${NC}"
+    if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
+        ok "backend /api/health"
+    else
+        warn "backend unreachable on :${BACKEND_PORT}"
+        problems=$((problems + 1))
+    fi
+    if curl -fsS --max-time 3 "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1; then
+        ok "frontend on :${FRONTEND_PORT}"
+    else
+        warn "frontend unreachable on :${FRONTEND_PORT}"
+        problems=$((problems + 1))
+    fi
+
+    echo ""
+    echo -e "${BOLD}Audio${NC}"
+    if [ -f "$AUDIO_STATE" ]; then
+        local mic spk degraded
+        mic="$(audio_state_val MIC)"
+        spk="$(audio_state_val SPEAKER)"
+        degraded="$(audio_state_val DEGRADED)"
+        if [ -n "$spk" ]; then
+            ok "speaker: $spk   mic: ${mic:-none}"
+        else
+            warn "no speaker resolved — kiosk is silent"
+            problems=$((problems + 1))
+        fi
+        if [ "$degraded" = "no" ]; then
+            ok "expected hardware matched (TONOR in / P10S out)"
+        else
+            warn "degraded audio: $degraded"
+            problems=$((problems + 1))
+        fi
+    else
+        warn "talkbox-audio-init has not run — audio routing is unmanaged"
+        problems=$((problems + 1))
+    fi
+
+    echo ""
+    echo -e "${BOLD}Kiosk browser${NC}"
+    if pgrep -f "chromium.*--kiosk" >/dev/null 2>&1; then
+        ok "chromium kiosk running"
+    else
+        warn "chromium kiosk not running (normal over SSH without a display)"
+    fi
+
+    echo ""
+    echo -e "${BOLD}System${NC}"
+    local disk_pct
+    disk_pct="$(df -h / 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+    if [ -n "$disk_pct" ] && [ "$disk_pct" -lt 90 ] 2>/dev/null; then
+        ok "root disk ${disk_pct}% used"
+    else
+        warn "root disk ${disk_pct:-?}% used — nearly full"
+        problems=$((problems + 1))
+    fi
+    if systemctl is-enabled talkbox-stack.service >/dev/null 2>&1; then
+        ok "talkbox-stack.service enabled (stack starts at boot)"
+    else
+        warn "talkbox-stack.service not enabled — run kiosk-setup.sh"
+        problems=$((problems + 1))
+    fi
+
+    echo ""
+    note "Twilio webhook sync: run 'talkbox status' or 'talkbox watchdog'"
+    echo ""
+    if [ "$problems" -eq 0 ]; then
+        ok "doctor: no problems found"
+    else
+        warn "doctor: $problems problem(s) found"
+        exit 1
+    fi
+}
+
 kiosk_launch_cmd() {
     # The exact command the desktop session uses to start the kiosk browser.
     # Prefer the autostart entry so we stay in sync with how the Pi boots it;
@@ -389,6 +528,8 @@ usage() {
     echo -e "  ${BOLD}talkbox watchdog${NC}     check .env/backend/Twilio sync, repair if drifted"
     echo -e "  ${BOLD}talkbox restart${NC}   restart containers (no rebuild)"
     echo -e "  ${BOLD}talkbox refresh${NC}   reload the on-screen kiosk browser (no reboot)"
+    echo -e "  ${BOLD}talkbox audio${NC}     show mic/speaker routing  (talkbox audio test = loopback)"
+    echo -e "  ${BOLD}talkbox doctor${NC}    full appliance check: stack, health, audio, disk"
     echo -e "  ${BOLD}talkbox logs${NC}      tail backend logs  (talkbox logs talkbox-frontend)"
     echo -e "  ${BOLD}talkbox install${NC}   put 'talkbox' on your PATH"
     echo ""
@@ -401,6 +542,8 @@ case "${1:-}" in
     watchdog) cmd_watchdog ;;
     restart) cmd_restart ;;
     refresh) cmd_refresh ;;
+    audio)   shift || true; cmd_audio "$@" ;;
+    doctor)  cmd_doctor ;;
     logs)    shift || true; cmd_logs "$@" ;;
     install) cmd_install ;;
     *)       usage ;;

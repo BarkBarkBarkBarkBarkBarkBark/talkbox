@@ -18,6 +18,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Routes>
           {/* Root → production kiosk surface (no desktop chrome). */}
           <Route path="/" element={<KioskPage />} />
+          {/* /kiosk → same surface; the Pi appliance and docs open this URL. */}
+          <Route path="/kiosk" element={<KioskPage />} />
           {/* /demo → same kiosk with on-screen simulated keypad for browser demos. */}
           <Route path="/demo" element={<DemoKioskPage />} />
           {/* /chat → desktop routing console (admin / partner use). */}

@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     kiosk_mock_query: bool = Field(default=False, alias="KIOSK_MOCK_QUERY")
     # Inactivity timeout (seconds) before the kiosk auto-resets to the idle menu.
     kiosk_idle_reset_seconds: int = Field(default=60, alias="KIOSK_IDLE_RESET_SECONDS")
+    # Seconds of no keypad activity during a live call before the kiosk asks
+    # "are you still there?" (two warnings ~45s apart, then auto-hangup).
+    kiosk_call_idle_warn_seconds: int = Field(
+        default=300, alias="KIOSK_CALL_IDLE_WARN_SECONDS"
+    )
+    # Seconds of no activity before the idle screen dims (burn-in protection).
+    # Any key wakes it instantly.
+    kiosk_screen_dim_seconds: int = Field(
+        default=1800, alias="KIOSK_SCREEN_DIM_SECONDS"
+    )
 
     # ─── Kiosk calling (Twilio Voice) ─────────────────────────────────
     # Master switch for real outbound calls. Even when enabled, the backend

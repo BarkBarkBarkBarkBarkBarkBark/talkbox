@@ -3,6 +3,9 @@ import "./kiosk.css";
 import { useKeypadInput } from "../../hooks/useKeypadInput.js";
 import { SCREENS, TABS, useKioskStateMachine } from "../../hooks/useKioskStateMachine.js";
 import { useSingleKioskWindow } from "../../hooks/useSingleKioskWindow.js";
+import { useAudioHealth } from "../../hooks/useAudioHealth.js";
+import { useBackendHealth } from "../../hooks/useBackendHealth.js";
+import { useScreenDim } from "../../hooks/useScreenDim.js";
 import { playKeyTone } from "../../lib/keyTone.js";
 import KioskStatusBar from "./KioskStatusBar.jsx";
 import KioskFooterCommands from "./KioskFooterCommands.jsx";
@@ -13,6 +16,13 @@ import KioskMenu from "./KioskMenu.jsx";
 import KioskResourceList from "./KioskResourceList.jsx";
 import KioskResourceDetail from "./KioskResourceDetail.jsx";
 import { KioskCallActive, KioskCallConfirm } from "./KioskCallScreen.jsx";
+import {
+  DimOverlay,
+  HardwareBanner,
+  KioskErrorBoundary,
+  PresenceOverlay,
+  ReconnectOverlay,
+} from "./KioskGuards.jsx";
 import SimulatedKeypad from "./SimulatedKeypad.jsx";
 
 function CenterMessage({ title, subtitle, spinner }) {
@@ -44,7 +54,11 @@ export default function KioskShell({ demo = false }) {
     );
   }
 
-  return <KioskRuntime demo={demo} />;
+  return (
+    <KioskErrorBoundary>
+      <KioskRuntime demo={demo} />
+    </KioskErrorBoundary>
+  );
 }
 
 function KioskRuntime({ demo }) {
@@ -68,6 +82,15 @@ function KioskRuntime({ demo }) {
   }, [handleKey]);
 
   useKeypadInput(handleKeyWithTone, { enabled: true });
+
+  // Appliance guards: never active during a live call.
+  const callActive = state.screen === SCREENS.CALL_ACTIVE;
+  const offline = useBackendHealth({ suspended: callActive });
+  const dimmed = useScreenDim({
+    dimAfterSeconds: state.config?.screen_dim_seconds || 1800,
+    suspended: callActive,
+  });
+  const { micMissing, speakerMissing } = useAudioHealth();
 
   useEffect(() => {
     const tick = () => {
@@ -163,6 +186,7 @@ function KioskRuntime({ demo }) {
         mock={Boolean(state.config?.mock_mode)}
         clock={clock}
       />
+      <HardwareBanner micMissing={micMissing} speakerMissing={speakerMissing} />
       {onHome ? <KioskTabs tab={state.tab} onTab={setTab} /> : null}
       <div className="kiosk-screen" key={`${state.screen}-${state.tab}`}>
         {renderScreen()}
@@ -173,6 +197,14 @@ function KioskRuntime({ demo }) {
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
+      {offline && !callActive ? <ReconnectOverlay /> : null}
+      {state.callAttention ? (
+        <PresenceOverlay
+          level={state.callAttention}
+          onConfirm={() => handleKey("STILL_HERE")}
+        />
+      ) : null}
+      {dimmed ? <DimOverlay /> : null}
     </div>
   );
 }
