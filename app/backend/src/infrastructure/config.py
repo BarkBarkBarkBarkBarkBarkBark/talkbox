@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     embeddings_provider: str = Field(default="openai", alias="EMBEDDINGS_PROVIDER")  # openai | bedrock
     embeddings_model: str = Field(default="text-embedding-3-small", alias="EMBEDDINGS_MODEL")
     collection_name: str = Field(default="query_categories", alias="COLLECTION_NAME")
+    agency_collection_name: str = Field(
+        default="agency_catalog_v1", alias="AGENCY_COLLECTION_NAME"
+    )
 
     # ─── Persistence ──────────────────────────────────────────────────
     db_uri: str = Field(default="", alias="DB_URI")

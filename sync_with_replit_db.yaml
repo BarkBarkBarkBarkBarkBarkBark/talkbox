@@ -1,0 +1,1164 @@
+```yaml
+spec_version: "1.0"
+prompt_type: "talkbox_repo_architecture_migration_and_fly_deployment"
+execution_mode: "inspect_implement_configure_test_deploy"
+
+project:
+  name: "TalkBox"
+  organization: "First Step Communities"
+  related_platform: "FSC Resource Platform"
+  current_backend:
+    framework: "FastAPI"
+    hosting: "Fly.io"
+  kiosk_hardware:
+    platform: "Raspberry Pi"
+  purpose: |
+    TalkBox is a public-facing kiosk intended to help unsheltered and
+    disadvantaged users access approved community resources and place calls
+    to allow-listed service organizations.
+
+task_goal: |
+  Update this TalkBox repository to adopt a new architecture:
+
+  The FSC Resource Platform running on Replit, backed by its production
+  PostgreSQL database, is now the CANONICAL SOURCE OF TRUTH for:
+
+    - community organizations
+    - services/resources
+    - approved phone contacts
+    - TalkBox-visible resources
+    - announcements
+    - kiosk profiles
+    - kiosk-specific content configuration
+
+  This repository and its existing FastAPI service on Fly.io must no longer
+  treat locally hard-coded resource/contact lists as authoritative.
+
+  Implement automatic synchronization from the published FSC Resource Platform
+  API into the FastAPI service.
+
+  Configure the existing Fly.io application so this synchronization runs
+  reliably in production.
+
+  Preserve all existing TalkBox functionality, especially calling/Twilio,
+  kiosk behavior, authentication, and existing working routes.
+
+  Update repository documentation so future developers and coding agents
+  understand this architectural decision.
+
+critical_architecture_decision:
+
+  canonical_data_owner:
+    system: "FSC Resource Platform"
+    hosting: "Replit"
+    persistence: "Replit production PostgreSQL"
+
+  canonical_editing_interface:
+    system: "FSC Staff CMS"
+    users: "Authorized First Step Communities staff"
+
+  integration_boundary:
+    protocol: "HTTPS JSON API"
+    version: "v1"
+
+  backend_consumer:
+    system: "TalkBox FastAPI"
+    hosting: "Fly.io"
+
+  endpoint_client:
+    system: "TalkBox Raspberry Pi"
+
+  required_flow: |
+    FSC Staff CMS
+          |
+          v
+    Replit Production PostgreSQL
+          |
+          v
+    Replit authenticated /api/v1/talkbox/*
+          |
+          v
+    TalkBox FastAPI on Fly.io
+          |
+          v
+    TalkBox Raspberry Pi kiosks
+
+  prohibited_flow: |
+    Raspberry Pi -> PostgreSQL
+
+  prohibited_default_flow: |
+    Fly.io FastAPI -> raw PostgreSQL connection
+
+  architectural_rule: |
+    Never bypass the FSC Resource Platform API for ordinary TalkBox resource
+    synchronization.
+
+    The API, not the database schema, is the integration contract.
+
+agent_behavior:
+
+  first_action: |
+    Inspect the repository before changing anything.
+
+    Determine:
+      - project layout
+      - FastAPI application entrypoint
+      - current Fly.io app name
+      - current fly.toml
+      - current Dockerfile
+      - current startup command
+      - current internal port
+      - current health endpoints
+      - existing environment variable conventions
+      - current resource/contact configuration
+      - existing hard-coded phone allowlists
+      - current kiosk configuration flow
+      - existing Twilio/calling behavior
+      - test framework
+      - whether flyctl is installed/authenticated
+      - current Fly Machine state
+
+    Do not assume file paths or app names when they can be discovered.
+
+  implementation_rule: |
+    Make the changes.
+
+    Do not only write an architecture plan.
+
+    Preserve existing working behavior.
+
+    Use incremental changes and existing project conventions where sensible.
+
+  safety_rule: |
+    Never print, commit, expose, or copy secret values into logs or source files.
+
+new_design_decision:
+
+  statement: |
+    Replit production PostgreSQL is now the canonical database for resource
+    information shared between the FSC Youth Resource Website and TalkBox.
+
+    FSC staff maintain this data through the Replit-hosted Staff CMS.
+
+    TalkBox consumes approved TalkBox data through a versioned API.
+
+    TalkBox does not own or duplicate the authoritative community resource
+    directory.
+
+  consequences:
+    - "Hard-coded resource lists are no longer authoritative."
+    - "Hard-coded agency phone numbers should be migrated to API-backed data where appropriate."
+    - "Staff can update resources without modifying TalkBox source code."
+    - "Changes propagate automatically through synchronization."
+    - "TalkBox must tolerate temporary upstream outages."
+    - "Existing local/default resources may remain only as emergency bootstrap fallbacks if explicitly justified."
+    - "The external API contract must be isolated behind a client/service abstraction."
+
+upstream_service:
+
+  name: "FSC Resource Platform"
+
+  configuration:
+    base_url_env: "FSC_RESOURCE_API_BASE_URL"
+    api_key_env: "FSC_RESOURCE_API_KEY"
+
+  expected_endpoints:
+
+    health:
+      method: "GET"
+      path: "/api/health"
+      authentication: false
+
+    ready:
+      method: "GET"
+      path: "/api/ready"
+      authentication: false
+
+    version:
+      method: "GET"
+      path: "/api/v1/talkbox/version"
+      authentication: "Bearer"
+
+    bootstrap:
+      method: "GET"
+      path: "/api/v1/talkbox/bootstrap"
+      authentication: "Bearer"
+
+      optional_query:
+        kiosk_code: "string"
+
+    services:
+      method: "GET"
+      path: "/api/v1/talkbox/services"
+      authentication: "Bearer"
+
+    kiosk_config:
+      method: "GET"
+      path: "/api/v1/talkbox/kiosks/{kiosk_code}/config"
+      authentication: "Bearer"
+
+    heartbeat:
+      method: "POST"
+      path: "/api/v1/talkbox/kiosks/{kiosk_code}/heartbeat"
+      authentication: "Bearer"
+
+  IMPORTANT: |
+    Do not blindly assume these endpoint schemas if the actual published API
+    is available.
+
+    If FSC_RESOURCE_API_BASE_URL is configured:
+
+      1. Retrieve the upstream OpenAPI schema from /openapi.json or
+         /api/openapi.json if available.
+      2. Compare the real API contract against this specification.
+      3. Adapt the client to the real published contract.
+      4. Do not silently invent fields or endpoints.
+
+    If the upstream is unavailable, implement against this documented
+    contract and clearly report that live integration verification remains.
+
+environment_variables:
+
+  required:
+
+    FSC_RESOURCE_API_BASE_URL:
+      description: "Published HTTPS URL of FSC Resource Platform."
+      secret: false
+      example: "https://<published-replit-domain>"
+
+    FSC_RESOURCE_API_KEY:
+      description: "Service-to-service bearer credential."
+      secret: true
+
+  configurable:
+
+    FSC_RESOURCE_SYNC_INTERVAL_SECONDS:
+      default: 60
+      description: |
+        Frequency while the FastAPI Machine is running at which the service
+        checks whether canonical TalkBox content changed.
+
+    FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS:
+      default: 10
+
+    FSC_RESOURCE_CACHE_MAX_AGE_SECONDS:
+      default: 86400
+      description: |
+        Metadata threshold for warning that cached data may be stale.
+        Do not automatically discard last-known-good content solely due to age.
+
+    FSC_RESOURCE_SYNC_ENABLED:
+      default: "true"
+
+  repository_files:
+    requirements:
+      - "Add variables to .env.example."
+      - "Document variables in README."
+      - "Never put real FSC_RESOURCE_API_KEY into .env.example."
+      - "Never commit .env containing secrets."
+
+implementation:
+
+  create_module:
+    conceptual_name: "FSC Resource API Client"
+
+    preferred_location: |
+      Follow the repository's existing package structure.
+
+      Examples only:
+        app/integrations/fsc_resources.py
+        app/services/resource_sync.py
+        talkbox/integrations/fsc_resource_client.py
+
+      Do not reorganize the whole repository unnecessarily.
+
+  http_client:
+    preferred_library: "httpx.AsyncClient"
+
+    requirements:
+      - "Reuse connections."
+      - "Use explicit connect/read timeout."
+      - "Send Bearer authentication."
+      - "Use JSON."
+      - "Validate responses with Pydantic models."
+      - "Never log Authorization headers."
+      - "Never log the API key."
+      - "Raise useful typed/domain errors."
+
+  models:
+    create_typed_models_for:
+      - "ContentVersion"
+      - "BootstrapSnapshot"
+      - "Organization/service resource"
+      - "Service contact"
+      - "Announcement"
+      - "Kiosk profile/configuration"
+
+    compatibility_rule: |
+      Treat unknown additive upstream fields safely when practical so adding a
+      harmless new API field does not break old TalkBox versions.
+
+automatic_sync:
+
+  required: true
+
+  strategy: "version_check_then_snapshot"
+
+  startup_behavior:
+
+    sequence:
+      - "Start FastAPI application initialization."
+      - "Initialize ResourceSyncService."
+      - "Attempt to query upstream /version."
+      - "If no cached snapshot exists, fetch /bootstrap."
+      - "Validate full snapshot."
+      - "Install snapshot atomically."
+      - "Start periodic synchronization task."
+
+    failure_rule: |
+      An upstream FSC Resource Platform outage must not crash unrelated FastAPI
+      functionality such as existing TalkBox call handling.
+
+      Log a clear warning.
+
+      Continue with last-known-good data if available.
+
+  periodic_behavior:
+
+    interval_seconds_env: "FSC_RESOURCE_SYNC_INTERVAL_SECONDS"
+
+    sequence:
+      - "GET upstream version."
+      - "Compare upstream content_version to locally cached content_version."
+      - "If identical: do nothing."
+      - "If newer/different: fetch complete bootstrap snapshot."
+      - "Validate complete bootstrap snapshot."
+      - "Only after successful validation atomically replace current snapshot."
+      - "Record sync timestamp and version."
+
+  request_time_behavior: |
+    Do not rely solely on the background scheduler.
+
+    If an incoming request needs resource data and the service has never synced,
+    attempt an on-demand synchronization.
+
+    If cached metadata is stale, asynchronously or safely trigger a refresh
+    while continuing to serve last-known-good content when appropriate.
+
+    This ensures correctness after machine start/resume even if the periodic
+    task has not run yet.
+
+  concurrency:
+    requirements:
+      - "Prevent multiple simultaneous refreshes."
+      - "Use asyncio lock or equivalent."
+      - "Readers must never see a half-written snapshot."
+      - "Snapshot replacement must be atomic from application perspective."
+
+cache:
+
+  concept: "last-known-good snapshot"
+
+  authoritative: false
+
+  requirements:
+    - "Cache only TalkBox-approved public/configuration data."
+    - "Store current content_version."
+    - "Store fetched_at."
+    - "Store generated_at from upstream when available."
+    - "Never treat cache as a new source of truth."
+    - "Never mutate canonical resource records locally."
+
+  memory_cache:
+    required: true
+
+  persistent_fly_cache:
+    required: false
+
+    rule: |
+      Inspect whether this Fly application already has a persistent volume.
+
+      Do not introduce a Fly Volume solely for this cache unless there is a
+      strong operational reason.
+
+      Do not assume the Fly Machine root filesystem is durable storage.
+
+  raspberry_pi_cache:
+    required_architecture: true
+
+    rule: |
+      The TalkBox kiosk software must retain its own last-known-good resource
+      snapshot so a temporary Fly.io or Replit outage does not make the kiosk
+      resource directory unusable.
+
+      Locate existing kiosk caching/config behavior and adapt it rather than
+      creating a conflicting parallel system.
+
+data_access_refactor:
+
+  inspect_for:
+    - "Hard-coded resource lists."
+    - "Hard-coded organization names."
+    - "Hard-coded public phone directory."
+    - "JSON/YAML resource files currently treated as canonical."
+    - "Environment variables containing ordinary service phone numbers."
+    - "Database/resource fixtures used at runtime."
+
+  migration_rule: |
+    Replace runtime dependencies on hard-coded canonical resource data with
+    ResourceSyncService lookups.
+
+  exceptions:
+    allowed:
+      - "911 or other truly immutable emergency behavior when justified."
+      - "Minimal emergency fallback UI."
+      - "Development/test fixtures."
+
+  do_not:
+    - "Delete working fallback behavior before replacement is tested."
+    - "Change Twilio calling logic unnecessarily."
+    - "Allow arbitrary numbers returned by an unvalidated source to bypass call allowlisting."
+
+call_security:
+
+  critical: true
+
+  rule: |
+    API-backed phone contacts may be used for TalkBox calling only when the
+    canonical API explicitly marks the contact as approved for TalkBox calls.
+
+  conceptual_field:
+    allow_call: true
+
+  behavior:
+    - "Do not treat every phone number in a resource record as callable."
+    - "Normalize phone numbers before comparison/use."
+    - "Maintain server-side call authorization."
+    - "Reject calls to numbers not currently approved by policy."
+    - "Preserve emergency call behavior according to existing TalkBox design."
+
+  transition_rule: |
+    During migration, compare existing hard-coded allowlist behavior against
+    API-backed approved contacts.
+
+    Do not weaken existing call security.
+
+fastapi_api:
+
+  preserve:
+    - "All existing working public/kiosk endpoints."
+    - "Existing Twilio call endpoints."
+    - "Existing monitoring endpoints unless intentionally superseded."
+
+  add_or_adapt:
+
+    - endpoint: "/healthz"
+      purpose: "FastAPI process liveness."
+      behavior:
+        success: 200
+
+      rule: |
+        This endpoint must not fail merely because Replit is temporarily down.
+
+    - endpoint: "/readyz"
+      purpose: "TalkBox backend readiness."
+
+      success_when:
+        - "FastAPI initialized."
+        - "Required application components initialized."
+        - "A valid resource snapshot exists OR resource functionality is not required for core readiness according to existing architecture."
+
+      failure_when:
+        - "Application cannot safely serve core TalkBox traffic."
+
+      important: |
+        Do not perform a blocking live Replit database/API check on every Fly
+        health probe.
+
+        A temporary upstream outage must not cause Fly to remove an otherwise
+        functioning cached TalkBox backend from service.
+
+    - endpoint: "/api/kiosk/resources"
+      method: "GET"
+      purpose: |
+        Expose the currently cached and approved TalkBox resource snapshot to
+        kiosk clients if an equivalent endpoint does not already exist.
+
+      query:
+        kiosk_code: "optional"
+
+      response_metadata:
+        - "schema_version"
+        - "content_version"
+        - "fetched_at"
+        - "upstream_generated_at"
+        - "stale"
+
+    - endpoint: "/api/kiosk/sync-status"
+      method: "GET"
+      purpose: "Operational diagnostics."
+
+      response:
+        fields:
+          - sync_enabled
+          - upstream_configured
+          - last_successful_sync
+          - last_sync_attempt
+          - content_version
+          - cache_available
+          - stale
+          - last_error_type_optional
+
+      security:
+        - "Never expose API key."
+        - "Never expose Authorization header."
+        - "Never expose full sensitive exception messages."
+
+  naming_rule: |
+    If equivalent routes already exist, extend them rather than creating
+    duplicate competing APIs.
+
+kiosk_behavior:
+
+  goal: |
+    TalkBox kiosks should automatically receive updated canonical resources
+    without requiring:
+      - SSH
+      - Git pull
+      - manual JSON edits
+      - Pi reimaging
+      - Fly redeployment
+
+  recommended_flow: |
+    Raspberry Pi
+        |
+        | GET TalkBox backend resource/config endpoint
+        v
+    Fly.io FastAPI cache
+        |
+        | automatically synchronized
+        v
+    FSC Resource Platform API
+        |
+        v
+    Replit production PostgreSQL
+
+  sync_behavior:
+    - "Kiosk checks Fly backend for content_version periodically."
+    - "Download new snapshot only if version changed."
+    - "Validate snapshot before replacement."
+    - "Atomically save last-known-good snapshot locally."
+    - "Continue using local cache if network fails."
+
+  startup:
+    - "Load local last-known-good snapshot first if available."
+    - "Do not block usable UI indefinitely waiting for network."
+    - "Attempt background/current sync."
+    - "Update UI when validated newer content becomes available."
+
+repository_documentation:
+
+  ADR:
+    required: true
+
+    suggested_path:
+      - "docs/adr/0001-fsc-resource-platform-source-of-truth.md"
+
+    title: "FSC Resource Platform as Canonical Resource Source"
+
+    required_sections:
+      Context: |
+        TalkBox previously maintained some resource/configuration data locally
+        or independently.
+
+      Decision: |
+        The FSC Resource Platform hosted on Replit and backed by production
+        PostgreSQL is the canonical resource source.
+
+        TalkBox accesses this information only through the published,
+        authenticated API via its FastAPI backend.
+
+      DataFlow: |
+        Staff CMS -> Replit PostgreSQL -> Replit API ->
+        Fly FastAPI -> TalkBox kiosk
+
+      Consequences:
+        - "One centrally editable resource directory."
+        - "Nontechnical FSC staff can update TalkBox resources."
+        - "TalkBox must synchronize and cache."
+        - "TalkBox must tolerate API outages."
+        - "Hard-coded runtime resources are deprecated."
+        - "Database schema is not a TalkBox integration contract."
+
+      Security:
+        - "No database credentials on kiosks."
+        - "No canonical write access from TalkBox."
+        - "Service credential stored only on Fly/Replit."
+        - "Call allowlisting remains server-controlled."
+
+  README:
+    update: true
+
+    add_sections:
+      - "Architecture"
+      - "Canonical Resource Data"
+      - "Automatic Resource Synchronization"
+      - "Environment Variables"
+      - "Fly.io Deployment"
+      - "Offline Behavior"
+      - "Troubleshooting Resource Sync"
+
+  agent_context:
+    update_files_if_present:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".github/copilot-instructions.md"
+      - "PROJECT.md"
+
+    requirement: |
+      Add the architecture decision to whichever repository-level agent/context
+      file already exists.
+
+      Do not create every possible agent file.
+
+      Ensure future coding agents are explicitly told:
+
+        "The FSC Resource Platform is the source of truth for TalkBox resource
+        and directory data. Do not reintroduce hard-coded canonical resource
+        lists."
+
+tests:
+
+  unit:
+    required:
+      - "API key is sent correctly without logging."
+      - "Version parsing."
+      - "Bootstrap validation."
+      - "Failed bootstrap does not replace good snapshot."
+      - "New version replaces snapshot."
+      - "Same version avoids unnecessary bootstrap."
+      - "Malformed upstream response rejected."
+      - "Timeout preserves cached data."
+      - "Unauthorized upstream response handled."
+      - "Only allow_call=true contacts become callable."
+      - "Concurrent refresh calls do not corrupt state."
+
+  integration:
+    required:
+      - "FastAPI startup succeeds with configured upstream."
+      - "FastAPI startup degrades gracefully if upstream unavailable."
+      - "Resource endpoint returns cached snapshot."
+      - "Sync status reports accurate state."
+      - "Existing call endpoint still works according to existing tests."
+      - "Health endpoint works."
+      - "Readiness behavior works."
+
+  live_upstream:
+    perform_if_credentials_available:
+      - "GET Replit /api/health."
+      - "GET Replit /api/ready."
+      - "Authenticated version request."
+      - "Authenticated bootstrap request."
+      - "Validate real response against models."
+
+    prohibited:
+      - "Do not alter production resource content as part of an integration test."
+
+fly_io:
+
+  critical_instruction: |
+    Configure the EXISTING Fly.io application.
+
+    Do not create a second Fly app unless no existing application exists and
+    repository evidence clearly indicates one is required.
+
+  inspection:
+
+    commands_or_equivalent:
+      - "fly status"
+      - "fly apps list"
+      - "fly machine list -a <discovered-app>"
+      - "fly secrets list -a <discovered-app>"
+      - "inspect fly.toml"
+      - "inspect Dockerfile"
+
+    security:
+      - "Do not attempt to print secret values."
+
+  fly_toml:
+
+    preserve_existing:
+      - "app name"
+      - "primary region unless there is a demonstrated reason to change"
+      - "working VM sizing"
+      - "Twilio/network configuration"
+      - "existing required environment variables"
+
+    ensure_http_service:
+      force_https: true
+      auto_start_machines: true
+
+    availability_strategy:
+      desired: |
+        Keep at least one FastAPI Machine running in the primary region so:
+          - TalkBox call requests avoid avoidable cold starts
+          - periodic resource synchronization continues
+          - updated FSC content propagates without waiting for the next cold start
+
+      preferred_configuration:
+        auto_stop_machines: "stop"
+        auto_start_machines: true
+        min_machines_running: 1
+
+      rule: |
+        Inspect current configuration first.
+
+        If the application intentionally uses a different always-on strategy,
+        preserve the equivalent behavior.
+
+        Do not accidentally scale down an existing more-resilient setup.
+
+    concurrency:
+      preferred_type: "requests"
+
+      rule: |
+        Preserve sensible existing limits unless incorrect.
+
+    health_check:
+      path: "/healthz"
+      expected_status: 200
+
+      rule: |
+        Configure a Fly HTTP health check if none exists.
+
+        Use liveness, not a direct dependency on Replit availability.
+
+    internal_port:
+      rule: |
+        Discover actual FastAPI/Uvicorn port and ensure:
+          - application listens on 0.0.0.0
+          - fly.toml internal_port matches
+          - Dockerfile/start command matches
+
+        Do not blindly change the port to 8080 if the application currently
+        uses another valid configuration.
+
+  production_environment:
+
+    FSC_RESOURCE_API_BASE_URL:
+      handling: |
+        Configure as Fly environment variable or secret using the actual
+        published FSC Resource Platform URL.
+
+    FSC_RESOURCE_API_KEY:
+      handling: |
+        Configure ONLY as a Fly secret.
+
+        Never place in fly.toml.
+        Never place in repository.
+
+    FSC_RESOURCE_SYNC_INTERVAL_SECONDS:
+      recommended_value: "60"
+
+  secret_configuration:
+
+    instruction: |
+      If the VS Code/terminal environment already securely provides the actual
+      FSC_RESOURCE_API_KEY value, configure it with flyctl without echoing it.
+
+      If the value is not available:
+
+        - do not invent one
+        - do not overwrite an existing secret blindly
+        - do not expose placeholders as production secrets
+        - finish all code/configuration work possible
+        - report the exact missing secret as the only manual step
+
+    conceptual_command:
+      fly secrets set \
+        FSC_RESOURCE_API_KEY="<secure-value>" \
+        -a "<discovered-existing-app>"
+
+  base_url_configuration:
+
+    instruction: |
+      Use the REAL published FSC Resource Platform URL if discoverable from
+      project configuration/user environment.
+
+      Validate HTTPS.
+
+      Do not point production Fly.io to:
+        - localhost
+        - Replit Preview URL intended only for development
+        - development database
+        - an guessed domain
+
+  deploy:
+
+    prerequisites:
+      - "Tests pass."
+      - "Type/lint checks pass where configured."
+      - "Docker build succeeds."
+      - "fly.toml validated."
+      - "Required nonsecret config exists."
+      - "Required secret is already configured or securely available."
+
+    action: |
+      If flyctl is authenticated and deployment credentials are available,
+      deploy the existing application.
+
+      Do not merely provide deployment instructions when the environment
+      already permits the agent to deploy safely.
+
+    command_concept:
+      fly deploy -a "<discovered-existing-app>"
+
+  post_deploy_verification:
+
+    required:
+      - "fly status shows healthy running Machine(s)."
+      - "At least one Machine is running in intended primary region."
+      - "Fly health checks pass."
+      - "Public FastAPI /healthz returns 200."
+      - "/readyz behaves correctly."
+      - "/api/kiosk/sync-status indicates upstream configuration."
+      - "A resource synchronization completes successfully if credentials exist."
+      - "content_version is populated."
+      - "Resource endpoint returns validated data."
+      - "Existing Twilio/calling endpoint remains operational."
+
+    logs:
+      inspect: true
+
+      look_for:
+        - "startup errors"
+        - "resource synchronization success"
+        - "resource synchronization failures"
+        - "database/API connectivity errors"
+        - "unhandled exceptions"
+
+      prohibited:
+        - "Do not output secrets while inspecting logs."
+
+operational_behavior:
+
+  normal:
+
+    example: |
+      12:00:00 FastAPI has content_version 143
+      12:01:00 GET Replit version -> 143
+      12:02:00 FSC staff changes a phone number
+      12:02:00 Replit commits canonical DB update
+      12:02:00 Replit content_version becomes 144
+      12:03:00 Fly FastAPI checks version -> 144
+      12:03:00 Fly downloads /bootstrap
+      12:03:00 Fly validates full payload
+      12:03:00 Fly atomically installs version 144
+      next kiosk sync -> receives version 144
+
+  replit_outage:
+
+    expected: |
+      Version request fails.
+      FastAPI logs bounded warning.
+      Current last-known-good snapshot remains available.
+      Existing call functionality remains available where independent.
+      Kiosks continue using their own local cache.
+
+  malformed_update:
+
+    expected: |
+      New version detected.
+      New bootstrap fails schema validation.
+      Existing last-known-good snapshot is NOT replaced.
+      Error is logged.
+      Retry occurs on future sync cycle.
+
+  fly_restart:
+
+    expected: |
+      FastAPI starts.
+      Automatically attempts fresh Replit bootstrap.
+      Does not require manual sync command.
+      Kiosk local cache protects the user experience while backend initializes.
+
+observability:
+
+  logging:
+    events:
+      - "resource_sync_started"
+      - "resource_sync_unchanged"
+      - "resource_sync_updated"
+      - "resource_sync_failed"
+      - "resource_cache_served"
+      - "upstream_auth_failed"
+
+    include:
+      - "content_version"
+      - "duration"
+      - "resource_count where non-sensitive"
+      - "error class"
+
+    exclude:
+      - "API key"
+      - "Authorization header"
+      - "database credentials"
+      - "sensitive client information"
+
+  optional_metrics:
+    - "talkbox_resource_sync_success_total"
+    - "talkbox_resource_sync_failure_total"
+    - "talkbox_resource_content_version"
+    - "talkbox_resource_cache_age_seconds"
+
+security:
+
+  requirements:
+    - "No raw Replit DATABASE_URL in this repo."
+    - "No raw database access from Pi."
+    - "No service API key on Pi."
+    - "Fly FastAPI owns service credential."
+    - "Pi communicates only with approved TalkBox backend endpoints."
+    - "Canonical writes remain FSC Staff CMS responsibility."
+    - "Validate all upstream data before use."
+    - "Phone-call authorization remains server-side."
+    - "Never permit upstream arbitrary content to execute as code or HTML."
+
+migration:
+
+  compatibility_goal: |
+    Make this change without breaking deployed TalkBox units.
+
+  approach:
+    - "Identify existing local resource data."
+    - "Introduce FSC Resource client and sync service."
+    - "Introduce API-backed read path."
+    - "Retain temporary fallback where necessary."
+    - "Test equivalence."
+    - "Switch authoritative read path to synced data."
+    - "Mark old canonical data mechanism deprecated."
+    - "Remove obsolete duplication only when safe."
+
+  do_not:
+    - "Perform an unrelated broad refactor."
+    - "Rewrite working Twilio code merely for style."
+    - "Delete legacy fallback before new integration works."
+    - "Create two independently editable resource systems."
+
+acceptance_criteria:
+
+  - id: "TB-001"
+    requirement: |
+      Repository documentation clearly states that the FSC Resource Platform
+      on Replit is the canonical source of truth.
+
+  - id: "TB-002"
+    requirement: |
+      FastAPI automatically fetches TalkBox content from the authenticated
+      Replit API without manual intervention.
+
+  - id: "TB-003"
+    requirement: |
+      FastAPI checks content_version periodically and downloads data only when
+      appropriate.
+
+  - id: "TB-004"
+    requirement: |
+      FastAPI automatically performs an initial synchronization after startup.
+
+  - id: "TB-005"
+    requirement: |
+      A failed synchronization never replaces valid cached data with empty or
+      malformed data.
+
+  - id: "TB-006"
+    requirement: |
+      TalkBox still functions with last-known-good resource data during a
+      temporary Replit outage.
+
+  - id: "TB-007"
+    requirement: |
+      No Raspberry Pi receives Replit database credentials or
+      FSC_RESOURCE_API_KEY.
+
+  - id: "TB-008"
+    requirement: |
+      Existing Twilio/calling behavior remains functional.
+
+  - id: "TB-009"
+    requirement: |
+      Only contacts explicitly approved for TalkBox calling may enter the
+      callable-number path.
+
+  - id: "TB-010"
+    requirement: |
+      Existing Fly.io app is configured and deployed without accidentally
+      creating a competing app.
+
+  - id: "TB-011"
+    requirement: |
+      At least one FastAPI Machine remains available in the primary region
+      unless an existing equivalent availability strategy is intentionally
+      preserved.
+
+  - id: "TB-012"
+    requirement: |
+      Fly health checks succeed without depending directly on live Replit
+      availability.
+
+  - id: "TB-013"
+    requirement: |
+      Production FastAPI reports synchronization state and current
+      content_version.
+
+  - id: "TB-014"
+    requirement: |
+      A change made by FSC staff in the canonical platform can reach TalkBox
+      without modifying TalkBox source code.
+
+  - id: "TB-015"
+    requirement: |
+      All automated tests and production smoke tests that can be executed from
+      the available environment pass.
+
+implementation_order:
+
+  - step: 1
+    action: "Inspect repository and current architecture."
+
+  - step: 2
+    action: "Inspect existing Fly.io app and configuration read-only."
+
+  - step: 3
+    action: "Document new architecture decision with ADR."
+
+  - step: 4
+    action: "Add environment/config models."
+
+  - step: 5
+    action: "Implement typed FSC Resource API client."
+
+  - step: 6
+    action: "Implement ResourceSyncService and last-known-good cache."
+
+  - step: 7
+    action: "Add startup, periodic, and request-time synchronization."
+
+  - step: 8
+    action: "Refactor canonical resource reads away from hard-coded data."
+
+  - step: 9
+    action: "Preserve and validate call allowlisting."
+
+  - step: 10
+    action: "Adapt kiosk-side versioned synchronization/local caching."
+
+  - step: 11
+    action: "Add health/readiness/sync diagnostics."
+
+  - step: 12
+    action: "Add/update tests."
+
+  - step: 13
+    action: "Update README and existing agent-context documentation."
+
+  - step: 14
+    action: "Configure fly.toml safely."
+
+  - step: 15
+    action: "Configure available Fly environment/secrets."
+
+  - step: 16
+    action: "Run local tests and build."
+
+  - step: 17
+    action: "Deploy existing Fly.io application if authenticated/configured."
+
+  - step: 18
+    action: "Run production smoke tests."
+
+  - step: 19
+    action: "Provide final implementation report."
+
+required_final_report:
+
+  sections:
+
+    Architecture:
+      include:
+        - "Old resource-data flow."
+        - "New resource-data flow."
+        - "Files changed."
+
+    Upstream:
+      include:
+        - "Actual FSC Resource Platform base URL if known."
+        - "Actual endpoints discovered."
+        - "OpenAPI compatibility result."
+
+    Synchronization:
+      include:
+        - "Sync interval."
+        - "Current content_version."
+        - "Last successful sync."
+        - "Number of resources loaded."
+        - "Cache/fallback behavior."
+
+    FlyIO:
+      include:
+        - "Existing Fly app name."
+        - "Primary region."
+        - "Machine count/state."
+        - "Health check status."
+        - "Relevant fly.toml changes."
+        - "Deployment result."
+
+    Secrets:
+      include:
+        - "Names of required secrets."
+        - "Whether each secret exists."
+
+      never_include:
+        - "Secret values."
+
+    Tests:
+      include:
+        - "Unit test result."
+        - "Integration test result."
+        - "Production smoke test result."
+        - "Existing call/Twilio regression result."
+
+    RemainingManualActions:
+      rule: |
+        List only actions the agent genuinely could not perform.
+
+        Examples:
+          - FSC_RESOURCE_API_KEY not supplied
+          - Published Replit URL unknown
+          - flyctl authentication unavailable
+
+    KnownLimitations:
+      include: true
+
+final_instruction: |
+  The desired end state is:
+
+      A nontechnical FSC staff member edits a resource in the FSC Staff CMS.
+
+      That edit updates the canonical Replit production PostgreSQL database.
+
+      The published FSC Resource API exposes the new version.
+
+      The existing TalkBox FastAPI service on Fly.io detects the new version
+      automatically and downloads a validated snapshot.
+
+      TalkBox kiosks receive the new resource data automatically.
+
+      No source-code modification, SSH session, Git pull, manual Pi edit,
+      or Fly redeployment is required for ordinary resource changes.
+
+  Implement and verify this end-to-end path as far as the credentials and
+  deployed systems available to this repository allow.
+
+  Do not claim that a layer was verified if it was not actually tested.
+```

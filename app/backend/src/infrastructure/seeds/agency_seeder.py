@@ -1,12 +1,11 @@
-"""Seed the ``categories`` + ``agencies`` tables from the master CSV.
+"""Replace the ``categories`` + ``agencies`` tables from the master CSV.
 
 The CSV lives alongside this module (``agencies_master.csv``) so it ships
-inside the backend image. Callers (CLI, bootstrap entrypoint) invoke
-``seed_agencies()`` without arguments; operators can override the CSV path
-explicitly if they need to pilot a different dataset.
+inside the backend image. This module is used only by the explicit operator
+command; normal application startup never imports catalog data.
 
-Strategy: TRUNCATE + INSERT inside a single transaction. Idempotent —
-re-running replaces the contents.
+Strategy: TRUNCATE + INSERT inside a single transaction. This is destructive:
+re-running discards all current category and agency rows.
 """
 
 from __future__ import annotations
@@ -42,7 +41,7 @@ def _norm(value: str | None) -> str | None:
     return v or None
 
 
-def seed_agencies(csv_path: Path | None = None) -> tuple[int, int]:
+def replace_agencies_from_csv(csv_path: Path | None = None) -> tuple[int, int]:
     """Replace categories + agencies with rows from ``csv_path``.
 
     Returns ``(categories_inserted, agencies_inserted)``.

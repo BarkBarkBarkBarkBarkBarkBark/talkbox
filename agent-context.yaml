@@ -67,30 +67,30 @@ infrastructure:
       key_tones: app/frontend/src/lib/keyTone.js — Web Audio sine tones on every keypress
 
   docker:
-    compose_file: /home/operator/talkbox/pointer-fork/docker-compose.yml
-    root_compose: /home/operator/talkbox/docker-compose.yml  # uses `include:` + name: pointer-fork
+    compose_file: /home/operator/talkbox/app/docker-compose.yml
+    root_compose: /home/operator/talkbox/docker-compose.yml  # uses `include:` + name: talkbox
     containers:
-      pointer-postgres:
+      talkbox-postgres:
         image: pgvector/pgvector:pg18
         role: Postgres 18 with pgvector extension (vector similarity search)
-        data_volume: postgres-data (persisted across rebuilds)
-        network: pointer-network (internal only, no exposed port)
-      pointer-backend:
-        image: built from pointer-fork/backend/
-        role: FastAPI Python 3.13 (Alpine), runs migrations + seeds on boot
+        data_volume: talkbox-postgres-data (persisted across rebuilds)
+        network: talkbox-network (internal only, no exposed port)
+      talkbox-backend:
+        image: built from app/backend/
+        role: FastAPI Python 3.13 (Alpine); runtime startup does not mutate catalog data
         port: "127.0.0.1:8085 -> container:8000"
-        entrypoint: pointer-fork/backend/docker-entrypoint.sh
-        note: runs `python main.py seed` (alembic migrations + pgvector seed + admin seed) then uvicorn
-      pointer-frontend:
-        image: built from pointer-fork/frontend/
+        entrypoint: app/backend/docker-entrypoint.sh
+        note: migrations, catalog replacement, and vector builds are explicit operator commands
+      talkbox-frontend:
+        image: built from app/frontend/
         role: React 19 + Vite, served via nginx
         port: "0.0.0.0:8084 -> container:80"
         note: nginx also reverse-proxies /api/* to pointer-backend:8000
 
   rebuild_commands:
     frontend_only: |
-      cd /home/operator/talkbox/pointer-fork
-      docker compose up -d --build pointer-frontend
+      cd /home/operator/talkbox
+      docker compose -p talkbox up -d --build talkbox-frontend
     backend_only: |
       cd /home/operator/talkbox/pointer-fork
       docker compose up -d --build pointer-backend

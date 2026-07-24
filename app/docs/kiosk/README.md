@@ -77,9 +77,8 @@ Then open:
 - Admin chat console: <http://localhost:8084/chat>
 - API health: <http://127.0.0.1:8085/api/health>
 
-The bundled `.env` defaults to a **zero-dependency demo**:
-`KIOSK_MOCK_QUERY=true`, `TALKBOX_SKIP_BOOTSTRAP=1` (no migrations/seeds),
-`DISABLE_AUTH=true`, `COOKIE_SECURE=0`.
+Normal backend startup never migrates, imports, or seeds data. Initialize a
+disposable local database with the explicit commands in the main README.
 
 ### Frontend-only dev (hot reload)
 
@@ -93,9 +92,9 @@ npm run dev   # http://localhost:5173/  (proxies /api to the compose backend on 
 
 1. Set `OPENAI_API_KEY` in `.env`.
 2. Set `KIOSK_MOCK_QUERY=false`.
-3. Remove the `TALKBOX_SKIP_BOOTSTRAP=1` line so migrations + vector/agency
-   seeds run on boot.
-4. `docker compose up --build` again.
+3. Run `python main.py migrate`, then explicitly initialize the catalog and
+  vector collections if the database is empty.
+4. `docker compose up --build` again. Restarts will not mutate catalog data.
 
 ## Raspberry Pi notes (later: M9)
 

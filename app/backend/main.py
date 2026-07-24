@@ -58,46 +58,32 @@ def run_migrate() -> None:
 
 
 def run_seed_agencies(csv_path: Path | None = None) -> tuple[int, int]:
-    from src.infrastructure.seeds.agency_seeder import seed_agencies
+    from src.infrastructure.seeds.agency_seeder import replace_agencies_from_csv
 
-    cats, agencies = seed_agencies(csv_path)
+    cats, agencies = replace_agencies_from_csv(csv_path)
     logging.getLogger("talkbox.seed").info(
         "seed-agencies complete: %d categories, %d agencies", cats, agencies
     )
     return cats, agencies
 
 
-def agencies_are_seeded() -> bool:
-    from src.infrastructure.config import settings
-    from src.infrastructure.db import to_sync_dsn
-
-    if not settings.db_uri:
-        return False
-
-    import psycopg
-
-    try:
-        with psycopg.connect(to_sync_dsn(settings.db_uri)) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT EXISTS (SELECT 1 FROM agencies)")
-                return bool(cur.fetchone()[0])
-    except psycopg.errors.UndefinedTable:
-        return False
-
-
-def run_seed() -> None:
-    """Bootstrap migrations and seeds without overwriting published resources."""
-    run_migrate()
-
+def run_seed_category_vectors() -> int:
     from src.infrastructure.seeds.vector_seeder import seed_query_categories
 
-    n = seed_query_categories()
-    logging.getLogger("talkbox.seed").info("vector seed complete: %d documents", n)
+    count = seed_query_categories()
+    logging.getLogger("talkbox.seed").info(
+        "category vector seed complete: %d documents", count
+    )
+    return count
 
-    if agencies_are_seeded():
-        logging.getLogger("talkbox.seed").info("agency seed skipped: live resources already exist")
-    else:
-        run_seed_agencies()
+def run_seed_agency_vectors() -> int:
+    from src.infrastructure.seeds.agency_vector_seeder import seed_agency_vectors
+
+    count = seed_agency_vectors()
+    logging.getLogger("talkbox.seed").info(
+        "agency vector seed complete: %d documents", count
+    )
+    return count
 
 
 def main() -> None:
@@ -113,18 +99,26 @@ def main() -> None:
 
     sub.add_parser("migrate", help="Run pending Alembic migrations (alembic upgrade head)")
     sub.add_parser(
-        "seed",
-        help="Full bootstrap: migrate + vector seeds + agencies/categories seeds",
+        "seed-category-vectors",
+        help="Seed category-routing vectors if the configured collection is incomplete",
     )
-
+    sub.add_parser(
+        "seed-agency-vectors",
+        help="Seed all agencies into a fresh, versioned vector collection",
+    )
     seed_ag_cmd = sub.add_parser(
         "seed-agencies",
-        help="Reload categories + agencies tables from the master CSV (idempotent)",
+        help="Replace categories + agencies from the master CSV",
     )
     seed_ag_cmd.add_argument(
         "--csv",
         default=None,
         help="Override the default CSV path (packaged under src/infrastructure/seeds/)",
+    )
+    seed_ag_cmd.add_argument(
+        "--confirm-replace",
+        action="store_true",
+        help="Confirm replacement of all agencies and categories from the CSV",
     )
 
     args = parser.parse_args()
@@ -132,9 +126,15 @@ def main() -> None:
         run_api(host=args.host, port=args.port, reload=args.reload)
     elif args.command == "migrate":
         run_migrate()
-    elif args.command == "seed":
-        run_seed()
+    elif args.command == "seed-category-vectors":
+        run_seed_category_vectors()
+    elif args.command == "seed-agency-vectors":
+        run_seed_agency_vectors()
     elif args.command == "seed-agencies":
+        if not args.confirm_replace:
+            raise SystemExit(
+                "Refusing to replace agencies and categories without --confirm-replace."
+            )
         run_seed_agencies(Path(args.csv).resolve() if args.csv else None)
 
 

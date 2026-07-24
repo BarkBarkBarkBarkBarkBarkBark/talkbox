@@ -113,13 +113,37 @@ fi
 info "Ensuring shell scripts have LF line endings..."
 sed -i 's/\r//' "$INSTALL_DIR/app/backend/docker-entrypoint.sh"
 
-# ── 5. Build + launch ────────────────────────────────────────────────────────
-info "Building and starting containers (first build takes ~5-10 min on Pi)..."
+# ── 5. Build + initialize ───────────────────────────────────────────────────
+info "Building containers (first build takes ~5-10 min on Pi)..."
 cd "$INSTALL_DIR/app"
-$DOCKER compose up -d --build
+$DOCKER compose build
+$DOCKER compose up -d talkbox-postgres
+
+info "Running schema migrations..."
+$DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+    main.py migrate
+
+AGENCY_COUNT=$(
+    $DOCKER compose exec -T talkbox-postgres \
+        psql -U talkbox -d talkbox -Atc "SELECT COUNT(*) FROM agencies"
+)
+if [ "$AGENCY_COUNT" = "0" ]; then
+    info "Initializing the empty local catalog..."
+    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+        main.py seed-agencies --confirm-replace
+    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+        main.py seed-category-vectors
+    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+        main.py seed-agency-vectors
+else
+    info "Existing catalog has $AGENCY_COUNT agencies; leaving it unchanged."
+fi
+
+info "Starting application services..."
+$DOCKER compose up -d
 
 # ── 6. Wait for health ───────────────────────────────────────────────────────
-info "Waiting for backend to finish seeding database..."
+info "Waiting for backend health..."
 ATTEMPTS=0
 until $DOCKER compose exec talkbox-backend curl -fsS http://localhost:8000/api/health &>/dev/null; do
     ATTEMPTS=$((ATTEMPTS + 1))

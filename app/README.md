@@ -19,10 +19,10 @@ supporting routing/data assets, not the primary user-facing product.
 ```
 Talk Box/
 ├── backend/                        FastAPI + LangChain + Alembic + fastapi-users
-│   ├── main.py                     CLI: api | migrate | seed | seed-agencies
+│   ├── main.py                     explicit API, migration, import, vector CLI
 │   ├── pyproject.toml + uv.lock    dependency manifest (uv)
 │   ├── Dockerfile                  multi-stage alpine (builder + ~180 MB runtime)
-│   ├── docker-entrypoint.sh        runs `python main.py seed` before uvicorn
+│   ├── docker-entrypoint.sh        runtime setup only; never mutates catalog data
 │   ├── alembic/                    migrations (schema owned by Alembic)
 │   └── src/
 │       ├── presentation/           FastAPI app, routers, Pydantic schemas, auth wiring
@@ -173,31 +173,16 @@ Two env switches drive the whole stack:
 
 ---
 
-## Auto-bootstrap
+## Database lifecycle
 
-Every `docker compose up` runs through the same deterministic sequence, with
-**zero manual steps** between `up` and a working API:
+Normal backend startup does not run migrations, import CSV data, or create
+embeddings. These operations are explicit so a restart cannot overwrite a
+curated catalog. `install.sh` initializes a local database only when the
+`agencies` table is empty; it leaves every populated catalog unchanged.
 
-1. `talkbox-postgres` starts clean (or resumes from the `postgres-data` volume).
-2. `talkbox-backend`'s entrypoint runs `python main.py seed`, which in order:
-   1. `alembic upgrade head` → `vector` extension + `categories`, `agencies`,
-      `users` tables.
-   2. `vector_seeder.py` → counts rows in the target collection, skips if already
-      populated; otherwise embeds the 30 JSON seeds via OpenAI or Bedrock and
-      upserts them by deterministic id.
-   3. `agency_seeder.py` → `TRUNCATE agencies, categories RESTART IDENTITY
-      CASCADE` + bulk insert from `agencies_master.csv` (29 categories, 301
-      agencies) in a single transaction.
-3. The FastAPI lifespan seeds the admin user (idempotent: if `ADMIN_EMAIL`
-   already exists, no-op).
-4. `uvicorn` takes over. `/api/health` comes up.
-5. The backend image ships with `database/sacramento.db` at
-   `/app/database/sacramento.db`; if `/data/sacramento.db` is present it still
-   takes precedence as an override, so Healthscout queries are served
-   immediately in both containerized and Fly deployments.
-
-Set `TALKBOX_SKIP_BOOTSTRAP=1` in the backend env to bypass step 2 (useful for
-integration tests against a pre-populated DB).
+For Neon setup and production migration, follow
+[`docs/NEON_MIGRATION.md`](docs/NEON_MIGRATION.md). Do not run catalog replacement
+commands against an existing production database without a verified backup.
 
 ---
 
@@ -206,15 +191,17 @@ integration tests against a pre-populated DB).
 ```bash
 python main.py api             # start uvicorn
 python main.py migrate         # alembic upgrade head
-python main.py seed            # migrate + vector seeds + agencies seeds
-python main.py seed-agencies   # reload just categories + agencies from CSV
-python main.py seed-agencies --csv /path/to/alt.csv   # override the default
+python main.py seed-category-vectors
+python main.py seed-agency-vectors
+python main.py seed-agencies --confirm-replace
+python main.py seed-agencies --confirm-replace --csv /path/to/alt.csv
 ```
 
 Inside a running container:
 
 ```bash
-sudo docker exec talkbox-backend python main.py seed-agencies
+sudo docker exec talkbox-backend \
+  python main.py seed-agencies --confirm-replace
 ```
 
 ---

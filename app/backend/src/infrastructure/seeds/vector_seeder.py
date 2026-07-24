@@ -32,7 +32,7 @@ def _load_payloads() -> list[dict]:
     return payloads
 
 
-def _existing_count(collection_name: str) -> int:
+def existing_collection_count(collection_name: str) -> int:
     """Return the number of rows already in the collection, or 0 if the
     langchain_pg_* tables don't exist yet."""
     try:
@@ -67,7 +67,7 @@ def seed_query_categories() -> int:
         logger.warning("No seed documents found in %s", SEEDS_DIR)
         return 0
 
-    existing = _existing_count(settings.collection_name)
+    existing = existing_collection_count(settings.collection_name)
     if existing >= len(payloads):
         logger.info(
             "skip seeding: collection '%s' already has %d >= %d rows",
