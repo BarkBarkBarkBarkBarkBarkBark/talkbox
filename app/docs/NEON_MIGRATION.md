@@ -4,10 +4,15 @@ Target organization: `org-super-sunset-88688178`
 
 Target project: `soft-hat-27629835`
 
-Neon will be the canonical TalkBox resource database and vector store. The
-central FastAPI deployment will use Neon through a least-privilege pooled
-connection. Kiosks must not receive Neon credentials or run imports and
-embedding jobs.
+Neon is the canonical persistence layer owned by the FSC Resource Platform.
+FSC staff update resource data through the Replit-hosted Staff CMS. Ordinary
+TalkBox runtime synchronization uses the authenticated FSC TalkBox API, not a
+raw Neon connection. Kiosks must never receive Neon credentials or the FSC API
+service credential.
+
+The direct database procedures below are retained only for one-time migration,
+recovery, and platform-owner maintenance. They are not the normal TalkBox data
+flow and must not be configured as the kiosk integration contract.
 
 ## Safety rules
 
@@ -17,8 +22,8 @@ embedding jobs.
 - Never run `seed-agencies` or `--confirm-replace` during application
   startup.
 - Never point catalog replacement commands at an existing curated database.
-- Use direct connections for Alembic and imports; use the pooled endpoint for
-  the Fly application.
+- Use direct connections only for deliberate platform migrations and imports.
+- Do not configure Fly's ordinary resource synchronization against raw Neon.
 - Treat CSV as one-time import input, not ongoing authority.
 
 ## Required roles
@@ -92,11 +97,12 @@ current authority until cutover.
 2. Create a Neon restore point or protected branch before import.
 3. Apply the already-rehearsed migrations to the production branch.
 4. Import and vectorize once using the explicit commands above.
-5. Configure Fly's `DB_URI` with the pooled application URI and
-   `sslmode=require`.
+5. Publish and validate the FSC `/api/v1/talkbox/version` and `/bootstrap`
+   endpoints against the curated production data.
 6. Do not configure importer or migrator credentials in Fly runtime secrets.
-7. Verify Fly liveness, database readiness, catalog counts, query provenance,
-   Twilio webhooks, and connection utilization.
+7. Configure Fly with `FSC_RESOURCE_API_BASE_URL` and the
+   `FSC_RESOURCE_API_KEY` secret, then verify liveness, sync status, catalog
+   counts, query provenance, and Twilio webhooks.
 8. Keep the Pi's local stack unchanged during the first central API soak test.
 9. Cut one kiosk over first. Retain the known-good local image and database
    dump until online and offline snapshot behavior passes production testing.

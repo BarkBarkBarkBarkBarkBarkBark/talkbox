@@ -19,11 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Routes>
           {/* Canonical public entrypoint: production kiosk surface, no desktop chrome. */}
           <Route path="/" element={<KioskPage />} />
-<<<<<<< HEAD
           {/* Backward-compatible hardware/docs alias. It is the same production kiosk. */}
-=======
-          {/* /kiosk → same surface; the Pi appliance and docs open this URL. */}
->>>>>>> a9aaa21 (commit, working)
           <Route path="/kiosk" element={<KioskPage />} />
           {/* /demo → same kiosk with on-screen simulated keypad for browser demos. */}
           <Route path="/demo" element={<DemoKioskPage />} />

@@ -303,9 +303,7 @@ function KioskRuntime({ demo }) {
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
-<<<<<<< HEAD
       {showIntro ? <IntroHeroPanel keystrokes={introKeystrokes} onDismiss={dismissIntro} /> : null}
-=======
       {offline && !callActive ? <ReconnectOverlay /> : null}
       {state.callAttention ? (
         <PresenceOverlay
@@ -314,7 +312,6 @@ function KioskRuntime({ demo }) {
         />
       ) : null}
       {dimmed ? <DimOverlay /> : null}
->>>>>>> a9aaa21 (commit, working)
     </div>
   );
 }

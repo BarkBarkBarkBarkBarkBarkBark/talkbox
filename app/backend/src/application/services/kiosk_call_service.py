@@ -21,6 +21,7 @@ import re
 from src.infrastructure.config import settings
 from src.infrastructure.database import get_db_connection
 from src.infrastructure.voice.twilio_voice_service import TwilioVoiceService
+from src.application.services.resource_sync_service import resource_sync_service
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,9 @@ class KioskCallService:
 
         if last10 in _test_numbers_last10():
             return "Test number (KIOSK_TEST_CALL_NUMBERS)"
+
+        if resource_sync_service.snapshot is not None:
+            return resource_sync_service.approved_agency(last10)
 
         connection = None
         cursor = None

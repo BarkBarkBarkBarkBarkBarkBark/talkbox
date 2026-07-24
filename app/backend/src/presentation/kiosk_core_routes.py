@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from src.application.services.kiosk_query_service import KioskQueryService
+from src.application.services.resource_sync_service import resource_sync_service
 from src.application.services.kiosk_stt_service import KioskSttError, KioskSttService
 from src.infrastructure.config import settings
 from src.presentation.query_runtime import query_handler
@@ -135,7 +136,8 @@ def kiosk_config() -> KioskConfigResponse:
 
 
 @router.post("/query", response_model=KioskQueryResponse)
-def kiosk_query(payload: KioskQueryRequest) -> KioskQueryResponse:
+async def kiosk_query(payload: KioskQueryRequest) -> KioskQueryResponse:
+    await resource_sync_service.ensure_available()
     logger.info("kiosk query: %r", payload.query)
     result = kiosk_query_service.query(payload.query)
     logger.info(

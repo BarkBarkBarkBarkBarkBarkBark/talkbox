@@ -42,6 +42,10 @@ primary_region = 'lax'
   KIOSK_MOCK_QUERY = 'false'
   KIOSK_CALLING_ENABLED = 'true'
   KIOSK_IDLE_RESET_SECONDS = '60'
+  FSC_RESOURCE_SYNC_ENABLED = 'true'
+  FSC_RESOURCE_SYNC_INTERVAL_SECONDS = '60'
+  FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS = '10'
+  FSC_RESOURCE_CACHE_MAX_AGE_SECONDS = '86400'
   # Tailscale: the machine joins the tailnet as ${TS_HOSTNAME} and exposes the
   # API over Funnel so Twilio can reach https://${TS_HOSTNAME}.<tailnet>.ts.net.
   # Requires the TS_AUTHKEY secret (set separately). No-op without it.
@@ -63,6 +67,13 @@ primary_region = 'lax'
     type = 'requests'
     soft_limit = 100
     hard_limit = 200
+
+  [[http_service.checks]]
+    grace_period = '20s'
+    interval = '15s'
+    method = 'GET'
+    path = '/healthz'
+    timeout = '5s'
 
 [[vm]]
   memory = '1gb'

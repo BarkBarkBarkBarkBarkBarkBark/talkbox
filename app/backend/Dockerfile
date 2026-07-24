@@ -62,6 +62,6 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 FROM base AS api
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=20s \
-    CMD curl -fsS http://localhost:8000/api/health || exit 1
+    CMD curl -fsS http://localhost:8000/healthz || exit 1
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python", "main.py", "api"]

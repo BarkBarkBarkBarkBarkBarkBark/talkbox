@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     db_name: str = Field(default="sacramento", alias="DB_NAME")
     db_table_name: str = Field(default="sacramento", alias="DB_TABLE_NAME")
 
+    # ─── Canonical FSC resource API ──────────────────────────────────
+    fsc_resource_api_base_url: str = Field(default="", alias="FSC_RESOURCE_API_BASE_URL")
+    fsc_resource_api_key: str = Field(default="", alias="FSC_RESOURCE_API_KEY")
+    fsc_resource_sync_enabled: bool = Field(default=True, alias="FSC_RESOURCE_SYNC_ENABLED")
+    fsc_resource_sync_interval_seconds: int = Field(
+        default=60, alias="FSC_RESOURCE_SYNC_INTERVAL_SECONDS"
+    )
+    fsc_resource_request_timeout_seconds: float = Field(
+        default=10.0, alias="FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS"
+    )
+    fsc_resource_cache_max_age_seconds: int = Field(
+        default=86400, alias="FSC_RESOURCE_CACHE_MAX_AGE_SECONDS"
+    )
+
     # ─── Observability ────────────────────────────────────────────────
     log_file: str = Field(default="app.log", alias="LOG_FILE")
     log_level: str = Field(default="info", alias="LOG_LEVEL")

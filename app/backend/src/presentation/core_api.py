@@ -9,6 +9,7 @@ from src.presentation.kiosk_call_routes import router as kiosk_call_router
 from src.presentation.kiosk_core_routes import router as kiosk_router
 from src.presentation.middleware import configure_cors
 from src.presentation.query_routes import router as query_router
+from src.presentation.resource_routes import router as resource_router
 from src.presentation.sms_routes import router as sms_router
 from src.presentation.schemas_user import UserCreate, UserRead, UserUpdate
 
@@ -17,13 +18,22 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from src.application.services.resource_sync_service import resource_sync_service
+
     try:
         from src.infrastructure.seed_admin import seed_admin
 
         await seed_admin()
     except Exception:
         logger.exception("admin seed failed at startup")
-    yield
+    try:
+        await resource_sync_service.start()
+    except Exception:
+        logger.exception("resource synchronization failed at startup")
+    try:
+        yield
+    finally:
+        await resource_sync_service.stop()
 
 
 def create_core_app() -> FastAPI:
@@ -34,6 +44,7 @@ def create_core_app() -> FastAPI:
         lifespan=lifespan,
     )
     configure_cors(app)
+    app.include_router(resource_router)
     app.include_router(query_router, prefix="/api")
     app.include_router(kiosk_router, prefix="/api")
     app.include_router(kiosk_call_router, prefix="/api")

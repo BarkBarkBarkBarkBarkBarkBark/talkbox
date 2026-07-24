@@ -12,6 +12,31 @@ phone calls placed straight from the browser via the Twilio Voice SDK.
 Outbound dialing is **allowlisted server-side** — the kiosk can only call
 known service agencies, the 211 help lines, and configured test numbers.
 
+## Canonical resource architecture
+
+The FSC Resource Platform is the source of truth for community organizations,
+services, approved contacts, announcements, and kiosk content. FSC staff manage
+those records in the Replit-hosted Staff CMS backed by production Neon
+PostgreSQL. TalkBox does not integrate with that database schema directly:
+
+```text
+FSC Staff CMS -> Replit Neon -> authenticated /api/v1/talkbox/*
+              -> TalkBox FastAPI on Fly.io -> TalkBox kiosks
+```
+
+FastAPI checks the upstream `content_version` every 60 seconds by default and
+downloads a complete typed snapshot only when it changes. A snapshot is
+installed atomically after validation; a timeout, unauthorized response, or
+malformed update leaves the last-known-good data untouched. `/healthz` remains
+healthy during an FSC outage, while `/api/kiosk/sync-status` reports cache and
+sync state.
+
+Synchronization is strictly limited to public resource and kiosk configuration
+data. Client, participant, user, submission, authentication, case, audit, and
+interaction-event records are excluded. Kiosk calling remains server-controlled:
+only active contacts explicitly marked `allow_talkbox_call=true` are callable.
+See [`docs/adr/0001-fsc-resource-platform-source-of-truth.md`](docs/adr/0001-fsc-resource-platform-source-of-truth.md).
+
 **Entrypoint rule:** TalkBox is a kiosk-first product. The canonical public
 entrypoint is `/`, which renders the production kiosk. `/kiosk` is a
 backward-compatible alias for the same kiosk surface. `/chat` is only a
@@ -140,9 +165,8 @@ cp app/.env.example app/.env
 #    API health:          http://127.0.0.1:8085/api/health
 ```
 
-First boot seeds Postgres with the agency database
-(`app/backend/src/infrastructure/seeds/agencies_master.csv`) and
-category embeddings.
+Local installs may bootstrap the legacy agency database for offline development.
+That seed is a fallback and is not the canonical production resource source.
 
 ### Smoke test
 
@@ -163,7 +187,8 @@ Twilio fetches dial instructions from `/api/kiosk/call/twiml` through your
 public HTTPS URL (for example Tailscale Funnel). The backend refuses any
 number that is not:
 
-1. in the seeded `agencies` table (matched on last 10 digits),
+1. an active FSC API contact explicitly approved for TalkBox calling (with the
+  legacy `agencies` table used only before the first canonical snapshot),
 2. a built-in 211 help-line number, or
 3. listed in `KIOSK_TEST_CALL_NUMBERS` (comma-separated, handy on trial
    accounts which can only call verified numbers).
@@ -230,6 +255,24 @@ uv sync && uv run python main.py api
 cd app/frontend
 npm install && npm run dev    # Vite proxies /api to 127.0.0.1:8085
 ```
+
+## Resource synchronization configuration
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `FSC_RESOURCE_API_BASE_URL` | Published HTTPS FSC Resource Platform origin | required |
+| `FSC_RESOURCE_API_KEY` | Backend-only bearer credential | required secret |
+| `FSC_RESOURCE_SYNC_ENABLED` | Enables startup and periodic synchronization | `true` |
+| `FSC_RESOURCE_SYNC_INTERVAL_SECONDS` | Version polling interval | `60` |
+| `FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS` | Upstream request timeout | `10` |
+| `FSC_RESOURCE_CACHE_MAX_AGE_SECONDS` | Stale-warning threshold | `86400` |
+
+On Fly, set `FSC_RESOURCE_API_BASE_URL` to the real published HTTPS origin and
+store `FSC_RESOURCE_API_KEY` with `fly secrets set`; never put the key in
+`fly.toml` or on a Raspberry Pi. Troubleshoot with `/api/kiosk/sync-status` and
+backend events `resource_sync_updated`, `resource_sync_unchanged`,
+`resource_sync_failed`, and `upstream_auth_failed`. The cache is currently
+in-memory on Fly and is repopulated automatically after process startup.
 
 ## Known sharp edges
 

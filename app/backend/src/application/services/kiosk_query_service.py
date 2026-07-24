@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 from src.application.services.query_handler import QueryHandler
+from src.application.services.resource_sync_service import resource_sync_service
 from src.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,11 @@ class KioskQueryService:
 
         if settings.kiosk_mock_query:
             return self._mock_query(text)
+
+        if resource_sync_service.snapshot is not None:
+            category, canonical_items = resource_sync_service.query(text, MAX_ITEMS)
+            items = self._number_items(canonical_items)
+            return self._payload(category, items) if items else self._empty_payload()
 
         try:
             result = self._run_structured_query(text)
@@ -194,7 +200,7 @@ class KioskQueryService:
                     "description": _truncate(it.get("description")),
                     # The backend call endpoint still enforces the allowlist; this
                     # only tells clients the resource has a dialable number.
-                    "callable": bool(normalized_phone),
+                    "callable": bool(it.get("callable", bool(normalized_phone))),
                 }
             )
         return items
