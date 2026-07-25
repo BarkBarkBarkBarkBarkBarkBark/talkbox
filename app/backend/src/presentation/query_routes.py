@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.infrastructure.persistence.database import User
 from src.presentation.auth import optional_current_user
-from src.presentation.query_runtime import query_handler
+from src.presentation.query_runtime import get_query_handler
 from src.presentation.schemas import (
     ErrorResponse,
     HealthResponse,
@@ -37,7 +37,7 @@ def process_user_query(
 ) -> QueryResponse:
     logger.info("query from %s: %r", user.email if user else "anonymous", payload.query)
     try:
-        result = query_handler.handle_query(payload.query)
+        result = get_query_handler().handle_query(payload.query)
         payload_data = result.get("results")
         results = ResultsPayload(**payload_data) if payload_data else None
         return QueryResponse(

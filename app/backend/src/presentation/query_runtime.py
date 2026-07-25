@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from src.application.services.query_handler import QueryHandler
 from src.infrastructure.healthscout_agent.healthscout_db_query import HealthScoutDB
 from src.infrastructure.healthscout_agent.healthscout_extractor import HealthScoutExtractor
@@ -5,15 +7,12 @@ from src.infrastructure.healthscout_agent.query_healthscout_service import Query
 from src.infrastructure.sql_agent.sql_executor import SQLExecutor
 from src.infrastructure.vector_store.pgvector_query_categorizer import PGVectorQueryCategorizer
 
-pg_vector_categorizer = PGVectorQueryCategorizer()
-sql_executor = SQLExecutor()
-healthscout_db = HealthScoutDB()
-healthscout_extractor = HealthScoutExtractor()
-query_healthscout_service = QueryHealthscoutService(healthscout_db)
-
-query_handler = QueryHandler(
-    categorizer=pg_vector_categorizer,
-    executor=sql_executor,
-    hs_query=query_healthscout_service,
-    hs_extract_info=healthscout_extractor,
-)
+@lru_cache(maxsize=1)
+def get_query_handler() -> QueryHandler:
+    healthscout_db = HealthScoutDB()
+    return QueryHandler(
+        categorizer=PGVectorQueryCategorizer(),
+        executor=SQLExecutor(),
+        hs_query=QueryHealthscoutService(healthscout_db),
+        hs_extract_info=HealthScoutExtractor(),
+    )

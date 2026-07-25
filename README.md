@@ -31,6 +31,24 @@ malformed update leaves the last-known-good data untouched. `/healthz` remains
 healthy during an FSC outage, while `/api/kiosk/sync-status` reports cache and
 sync state.
 
+The source currently supports multiple frontend/backend topologies. A local
+client appliance serves React through nginx and proxies `/api/*` to its own
+backend container. The Vercel frontend rewrites `/api/*` to Fly, while CI-built
+frontend images may bake another backend into `VITE_API_URL`. Keep these roles
+separate when configuring credentials: only Fly receives the FSC service key;
+client appliances receive a distinct read-only snapshot key.
+
+Validated snapshots persist at `/data/resource-snapshot.sqlite3`. Configure a
+Docker-based client appliance, whether Raspberry Pi, Linux, or macOS, with:
+
+```bash
+./scripts/configure-client-snapshot.sh https://talkbox.fly.dev
+```
+
+The helper requires `python3`, updates ignored `app/.env` without printing the
+key, recreates only the backend, and reports non-secret synchronization status.
+For a local virtual environment, use `python3 -m venv .venv`.
+
 Synchronization is strictly limited to public resource and kiosk configuration
 data. Client, participant, user, submission, authentication, case, audit, and
 interaction-event records are excluded. Kiosk calling remains server-controlled:
@@ -218,11 +236,10 @@ KIOSK_STT_MODEL_PATH=/models/ggml-tiny.en-q5_1.bin
 KIOSK_STT_MAX_SECONDS=6
 ```
 
-For a Pi install, install `ffmpeg`, build or install `whisper.cpp`, download a
-quantized tiny English model once, and mount/copy it to the configured model
-path. Do not redownload the model during normal `talkbox update` runs. The
-backend image includes `ffmpeg`; the `whisper.cpp` binary and model are expected
-at the configured paths unless you bake them into a custom image.
+The one-line Pi installer builds a pinned `whisper.cpp` binary into the backend
+image, downloads the quantized tiny English model once with checksum
+verification, and mounts it read-only at the configured model path. Normal
+`talkbox update` runs reuse the downloaded model.
 
 ## Deploying to a Raspberry Pi
 

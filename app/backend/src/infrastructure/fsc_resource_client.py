@@ -41,17 +41,28 @@ class ServiceContact(PublicResourceModel):
 
 class OrganizationService(PublicResourceModel):
     id: str
-    name: str
-    description: str | None = None
+    name: str = Field(validation_alias=AliasChoices("name", "service_name"))
+    description: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("description", "short_description"),
+    )
+    organization_name: str | None = None
     category: str | None = None
     address: str | None = None
     city: str | None = None
     state: str | None = None
     postal_code: str | None = None
     phone: str | None = None
+    allow_call: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("allow_call", "allow_talkbox_call"),
+    )
     website_url: str | None = None
     hours_text: str | None = None
-    eligibility_text: str | None = None
+    eligibility_text: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("eligibility_text", "eligibility"),
+    )
     languages_text: str | None = None
     status: str | None = None
     talkbox_visible: bool = True
@@ -61,6 +72,8 @@ class OrganizationService(PublicResourceModel):
         for contact in sorted(self.contacts, key=lambda item: not item.allow_call):
             if contact.active and contact.allow_call and contact.contact_type == "phone":
                 return contact.value
+        if self.allow_call:
+            return self.phone
         return None
 
 

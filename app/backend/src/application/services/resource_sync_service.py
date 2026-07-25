@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 from src.infrastructure.config import settings
 from src.infrastructure.fsc_resource_client import (
@@ -13,6 +14,8 @@ from src.infrastructure.fsc_resource_client import (
     FSCResourceAuthError,
     FSCResourceClient,
 )
+from src.infrastructure.resource_snapshot_cache import ResourceSnapshotCache
+from src.infrastructure.talkbox_snapshot_client import ClientSnapshotClient
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +25,9 @@ def _digits(value: str | None) -> str:
 
 
 class ResourceSyncService:
-    def __init__(self) -> None:
+    def __init__(self, cache_path: str | Path | None = None) -> None:
         self._snapshot: BootstrapSnapshot | None = None
+        self._cache = ResourceSnapshotCache(cache_path) if cache_path else None
         self._client: FSCResourceClient | None = None
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
@@ -33,7 +37,15 @@ class ResourceSyncService:
 
     @property
     def configured(self) -> bool:
-        return bool(settings.fsc_resource_api_base_url and settings.fsc_resource_api_key)
+        return self.upstream_source != "none"
+
+    @property
+    def upstream_source(self) -> str:
+        if settings.fsc_resource_api_base_url and settings.fsc_resource_api_key:
+            return "fsc-api"
+        if settings.talkbox_central_api_base_url and settings.talkbox_client_snapshot_key:
+            return "talkbox-central"
+        return "none"
 
     @property
     def snapshot(self) -> BootstrapSnapshot | None:
@@ -47,15 +59,52 @@ class ResourceSyncService:
         return age > settings.fsc_resource_cache_max_age_seconds
 
     async def start(self) -> None:
+        await self.restore_cached_snapshot()
         if not settings.fsc_resource_sync_enabled or not self.configured:
             return
-        self._client = FSCResourceClient(
-            settings.fsc_resource_api_base_url,
-            settings.fsc_resource_api_key,
-            settings.fsc_resource_request_timeout_seconds,
-        )
+        if self.upstream_source == "fsc-api":
+            self._client = FSCResourceClient(
+                settings.fsc_resource_api_base_url,
+                settings.fsc_resource_api_key,
+                settings.fsc_resource_request_timeout_seconds,
+            )
+        else:
+            self._client = ClientSnapshotClient(
+                settings.talkbox_central_api_base_url,
+                settings.talkbox_client_snapshot_key,
+                settings.fsc_resource_request_timeout_seconds,
+            )
         await self.refresh()
         self._task = asyncio.create_task(self._periodic_sync())
+
+    async def restore_cached_snapshot(self) -> bool:
+        if self._cache is None:
+            return False
+        try:
+            cached = await asyncio.to_thread(self._cache.load)
+            if cached is None:
+                return False
+            snapshot, fetched_at = cached
+            if not snapshot.services:
+                raise ValueError("Cached bootstrap contains no published TalkBox services")
+            self._snapshot = snapshot
+            self.last_successful_sync = fetched_at
+            logger.info(
+                "resource_cache_restored content_version=%s resource_count=%d",
+                snapshot.content_version,
+                len(snapshot.services),
+            )
+            return True
+        except Exception as exc:
+            self.last_error_type = type(exc).__name__
+            try:
+                quarantine_path = await asyncio.to_thread(self._cache.quarantine)
+            except OSError:
+                quarantine_path = None
+            if quarantine_path is not None:
+                logger.warning("resource_cache_quarantined path=%s", quarantine_path)
+            logger.warning("resource_cache_restore_failed error_class=%s", type(exc).__name__)
+            return False
 
     async def stop(self) -> None:
         if self._task is not None:
@@ -90,8 +139,11 @@ class ResourceSyncService:
                     raise ValueError("Bootstrap content version does not match version endpoint")
                 if not candidate.services:
                     raise ValueError("Bootstrap contains no published TalkBox services")
+                fetched_at = datetime.now(UTC)
+                if self._cache is not None:
+                    await asyncio.to_thread(self._cache.save, candidate, fetched_at)
                 self._snapshot = candidate
-                self.last_successful_sync = datetime.now(UTC)
+                self.last_successful_sync = fetched_at
                 self.last_error_type = None
                 logger.info(
                     "resource_sync_updated content_version=%s resource_count=%d",
@@ -133,14 +185,13 @@ class ResourceSyncService:
         items = []
         for service in services:
             approved_phone = service.approved_phone()
-            display_phone = approved_phone or service.phone
             address = ", ".join(
                 part for part in (service.address, service.city, service.state, service.postal_code) if part
             ) or None
             items.append(
                 {
                     "name": service.name,
-                    "phone": display_phone,
+                    "phone": approved_phone,
                     "address": address,
                     "description": service.description,
                     "callable": bool(approved_phone),
@@ -158,6 +209,7 @@ class ResourceSyncService:
         return {
             "sync_enabled": settings.fsc_resource_sync_enabled,
             "upstream_configured": self.configured,
+            "upstream_source": self.upstream_source,
             "last_successful_sync": self.last_successful_sync,
             "last_sync_attempt": self.last_sync_attempt,
             "content_version": self._snapshot.content_version if self._snapshot else None,
@@ -167,4 +219,4 @@ class ResourceSyncService:
         }
 
 
-resource_sync_service = ResourceSyncService()
+resource_sync_service = ResourceSyncService(cache_path=settings.fsc_resource_cache_path)

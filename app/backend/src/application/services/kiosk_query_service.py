@@ -16,6 +16,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from collections.abc import Callable
 
 from src.application.services.query_handler import QueryHandler
 from src.application.services.resource_sync_service import resource_sync_service
@@ -89,8 +90,14 @@ def _format_phone(raw: str | None) -> str | None:
 class KioskQueryService:
     """Adapts :class:`QueryHandler` output for keypad-first kiosk screens."""
 
-    def __init__(self, query_handler: QueryHandler):
-        self._handler = query_handler
+    def __init__(self, query_handler: QueryHandler | Callable[[], QueryHandler]):
+        self._handler_provider = query_handler
+
+    @property
+    def _handler(self) -> QueryHandler:
+        if callable(self._handler_provider):
+            return self._handler_provider()
+        return self._handler_provider
 
     def query(self, text: str) -> dict:
         text = (text or "").strip()

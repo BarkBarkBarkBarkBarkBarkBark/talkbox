@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Form, Response
 from twilio.twiml.messaging_response import MessagingResponse
 
-from src.presentation.query_runtime import query_handler
+from src.presentation.query_runtime import get_query_handler
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def sms_user_query(
 
     logger.info("sms query from %s: %r", user_number or "unknown", user_query)
     try:
-        result = query_handler.handle_query(user_query)
+        result = get_query_handler().handle_query(user_query)
         twilio_resp.message(result.get("response", "No valid result found."))
     except Exception:
         logger.exception("sms query handling failed")

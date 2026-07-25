@@ -24,9 +24,10 @@ echo ""
 # ── 1. Dependencies ──────────────────────────────────────────────────────────
 info "Checking dependencies..."
 
-if ! command -v git &>/dev/null; then
-    warn "git not found — installing..."
-    sudo apt-get update -qq && sudo apt-get install -y git curl
+if ! command -v git &>/dev/null || ! command -v curl &>/dev/null; then
+    warn "Installing git and curl..."
+    sudo apt-get update -qq
+    sudo apt-get install -y git curl ca-certificates
 fi
 
 if ! command -v docker &>/dev/null; then
@@ -62,7 +63,28 @@ fi
 
 cd "$INSTALL_DIR"
 
-# ── 3. Configure .env ────────────────────────────────────────────────────────
+# ── 3. Install local speech model ────────────────────────────────────────────
+WHISPER_MODEL_NAME="ggml-tiny.en-q5_1.bin"
+WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
+WHISPER_MODEL_SHA256="c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b"
+WHISPER_MODEL_DIR="$INSTALL_DIR/app/models"
+WHISPER_MODEL_PATH="$WHISPER_MODEL_DIR/$WHISPER_MODEL_NAME"
+
+mkdir -p "$WHISPER_MODEL_DIR"
+if [ -f "$WHISPER_MODEL_PATH" ] \
+    && echo "$WHISPER_MODEL_SHA256  $WHISPER_MODEL_PATH" | sha256sum --check --status; then
+    info "whisper.cpp model already installed."
+else
+    info "Downloading whisper.cpp model (31 MB, one time)..."
+    rm -f "$WHISPER_MODEL_PATH.tmp"
+    curl --fail --location --retry 3 --output "$WHISPER_MODEL_PATH.tmp" "$WHISPER_MODEL_URL"
+    echo "$WHISPER_MODEL_SHA256  $WHISPER_MODEL_PATH.tmp" | sha256sum --check --status \
+        || error "whisper.cpp model checksum verification failed."
+    mv "$WHISPER_MODEL_PATH.tmp" "$WHISPER_MODEL_PATH"
+    info "whisper.cpp model installed."
+fi
+
+# ── 4. Configure .env ────────────────────────────────────────────────────────
 ENV_FILE="$INSTALL_DIR/app/.env"
 
 if [ -f "$ENV_FILE" ]; then
@@ -76,22 +98,22 @@ else
     echo "  ┌─ Required settings ─────────────────────────────────────────────"
 
     # OpenAI key
-    read -rp "  │  OpenAI API key: " OPENAI_KEY
+    read -rp "  │  OpenAI API key: " OPENAI_KEY </dev/tty
     while [ -z "$OPENAI_KEY" ]; do
         echo "  │  ↳ Cannot be empty"
-        read -rp "  │  OpenAI API key: " OPENAI_KEY
+        read -rp "  │  OpenAI API key: " OPENAI_KEY </dev/tty
     done
 
     # Postgres password
-    read -rsp "  │  Choose a Postgres password: " PG_PASS; echo ""
+    read -rsp "  │  Choose a Postgres password: " PG_PASS </dev/tty; echo ""
     while [ ${#PG_PASS} -lt 8 ]; do
         echo "  │  ↳ Must be at least 8 characters"
-        read -rsp "  │  Postgres password: " PG_PASS; echo ""
+        read -rsp "  │  Postgres password: " PG_PASS </dev/tty; echo ""
     done
 
     # Admin credentials
-    read -rp "  │  Admin email (for the web UI): " ADMIN_EMAIL
-    read -rsp "  │  Admin password: " ADMIN_PASS; echo ""
+    read -rp "  │  Admin email (for the web UI): " ADMIN_EMAIL </dev/tty
+    read -rsp "  │  Admin password: " ADMIN_PASS </dev/tty; echo ""
 
     echo "  └─────────────────────────────────────────────────────────────────"
     echo ""
@@ -109,18 +131,24 @@ else
     info ".env written."
 fi
 
-# ── 4. Fix line endings on entrypoint (safe to re-run) ──────────────────────
+# ── 5. Fix line endings on entrypoint (safe to re-run) ──────────────────────
 info "Ensuring shell scripts have LF line endings..."
 sed -i 's/\r//' "$INSTALL_DIR/app/backend/docker-entrypoint.sh"
 
-# ── 5. Build + initialize ───────────────────────────────────────────────────
+# ── 6. Build + initialize ───────────────────────────────────────────────────
 info "Building containers (first build takes ~5-10 min on Pi)..."
 cd "$INSTALL_DIR/app"
 $DOCKER compose build
+
+info "Verifying local speech installation..."
+$DOCKER compose run --rm --no-deps --entrypoint sh talkbox-backend -c \
+    'command -v whisper-cli >/dev/null && test -s /models/ggml-tiny.en-q5_1.bin' \
+    || error "whisper.cpp binary or model is unavailable inside the backend container."
+
 $DOCKER compose up -d talkbox-postgres
 
 info "Running schema migrations..."
-$DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+$DOCKER compose run --rm --no-deps --entrypoint python3 talkbox-backend \
     main.py migrate
 
 AGENCY_COUNT=$(
@@ -129,11 +157,11 @@ AGENCY_COUNT=$(
 )
 if [ "$AGENCY_COUNT" = "0" ]; then
     info "Initializing the empty local catalog..."
-    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+    $DOCKER compose run --rm --no-deps --entrypoint python3 talkbox-backend \
         main.py seed-agencies --confirm-replace
-    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+    $DOCKER compose run --rm --no-deps --entrypoint python3 talkbox-backend \
         main.py seed-category-vectors
-    $DOCKER compose run --rm --no-deps --entrypoint python talkbox-backend \
+    $DOCKER compose run --rm --no-deps --entrypoint python3 talkbox-backend \
         main.py seed-agency-vectors
 else
     info "Existing catalog has $AGENCY_COUNT agencies; leaving it unchanged."
@@ -142,7 +170,7 @@ fi
 info "Starting application services..."
 $DOCKER compose up -d
 
-# ── 6. Wait for health ───────────────────────────────────────────────────────
+# ── 7. Wait for health ───────────────────────────────────────────────────────
 info "Waiting for backend health..."
 ATTEMPTS=0
 until $DOCKER compose exec talkbox-backend curl -fsS http://localhost:8000/api/health &>/dev/null; do
@@ -156,7 +184,7 @@ until $DOCKER compose exec talkbox-backend curl -fsS http://localhost:8000/api/h
 done
 echo ""
 
-# ── 7. Run embedding benchmark ───────────────────────────────────────────────
+# ── 8. Run embedding benchmark ───────────────────────────────────────────────
 if command -v python3 &>/dev/null && [ -f "$INSTALL_DIR/bench_embeddings.py" ]; then
     echo ""
     info "Running embedding latency benchmark on this hardware..."
@@ -169,7 +197,7 @@ HEREDOC
     python3 "$INSTALL_DIR/bench_embeddings.py" 2>/dev/null || warn "Benchmark skipped (deps missing)"
 fi
 
-# ── 8. Done ──────────────────────────────────────────────────────────────────
+# ── 9. Done ──────────────────────────────────────────────────────────────────
 LOCAL_IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo "  ╔══════════════════════════════════════════════════════════╗"

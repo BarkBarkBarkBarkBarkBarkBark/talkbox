@@ -28,7 +28,7 @@ primary_region = 'lax'
   target = 'api'
 
 [env]
-  LOG_FILE = '/tmp/app.log'
+  LOG_FILE = '/data/app.log'
   LOG_LEVEL = 'info'
   COOKIE_SECURE = '1'
   KIOSK_STT_PROVIDER = 'openai'
@@ -46,11 +46,16 @@ primary_region = 'lax'
   FSC_RESOURCE_SYNC_INTERVAL_SECONDS = '60'
   FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS = '10'
   FSC_RESOURCE_CACHE_MAX_AGE_SECONDS = '86400'
+  FSC_RESOURCE_CACHE_PATH = '/data/resource-snapshot.sqlite3'
   # Tailscale: the machine joins the tailnet as ${TS_HOSTNAME} and exposes the
   # API over Funnel so Twilio can reach https://${TS_HOSTNAME}.<tailnet>.ts.net.
   # Requires the TS_AUTHKEY secret (set separately). No-op without it.
   TS_HOSTNAME = 'talkbox'
   TS_FUNNEL = '1'
+
+[[mounts]]
+  source = 'talkbox_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8000

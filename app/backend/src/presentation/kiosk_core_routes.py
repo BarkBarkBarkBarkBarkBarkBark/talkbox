@@ -11,13 +11,13 @@ from src.application.services.kiosk_query_service import KioskQueryService
 from src.application.services.resource_sync_service import resource_sync_service
 from src.application.services.kiosk_stt_service import KioskSttError, KioskSttService
 from src.infrastructure.config import settings
-from src.presentation.query_runtime import query_handler
+from src.presentation.query_runtime import get_query_handler
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/kiosk", tags=["kiosk"])
 
-kiosk_query_service = KioskQueryService(query_handler)
+kiosk_query_service = KioskQueryService(get_query_handler)
 kiosk_stt_service = KioskSttService()
 
 

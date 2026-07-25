@@ -103,10 +103,9 @@ npm run dev   # http://localhost:5173/  (proxies /api to the compose backend on 
 - The Pi is a thin terminal: a Chromium kiosk pointed at `/` on the cloud
   (or a local) backend. Autostart, health page, and heartbeat land in M9.
 - Keep `KIOSK_MOCK_QUERY` off in the field; point the device at the real backend.
-- For voice search, install `ffmpeg`, install `whisper.cpp` as
-  `/usr/local/bin/whisper-cli`, and download `ggml-tiny.en-q5_1.bin` once to
-  `/models`. Keep the model outside the normal update path so updates do not
-  redownload it.
+- The one-line installer builds `whisper.cpp` into the backend image and
+  downloads `ggml-tiny.en-q5_1.bin` once into `app/models`. Compose mounts the
+  model read-only at `/models`; normal updates reuse it.
 
 ## Baseline reference (verified)
 

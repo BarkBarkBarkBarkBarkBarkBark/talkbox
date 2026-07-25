@@ -53,6 +53,23 @@ class Settings(BaseSettings):
     fsc_resource_cache_max_age_seconds: int = Field(
         default=86400, alias="FSC_RESOURCE_CACHE_MAX_AGE_SECONDS"
     )
+    fsc_resource_cache_path: str = Field(
+        default="/data/resource-snapshot.sqlite3",
+        alias="FSC_RESOURCE_CACHE_PATH",
+    )
+    talkbox_central_api_base_url: str = Field(
+        default="", alias="TALKBOX_CENTRAL_API_BASE_URL"
+    )
+    talkbox_client_snapshot_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TALKBOX_CLIENT_SNAPSHOT_KEY",
+            "TALKBOX_KIOSK_SNAPSHOT_KEY",
+        ),
+    )
+    talkbox_snapshot_publish_keys: str = Field(
+        default="", alias="TALKBOX_SNAPSHOT_PUBLISH_KEYS"
+    )
 
     # ─── Observability ────────────────────────────────────────────────
     log_file: str = Field(default="app.log", alias="LOG_FILE")

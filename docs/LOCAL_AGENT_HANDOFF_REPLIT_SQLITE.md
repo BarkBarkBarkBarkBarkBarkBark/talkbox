@@ -10,7 +10,8 @@ Simplify TalkBox so that:
    API. Do not connect kiosks or ordinary Fly runtime code directly to Neon.
 3. The local Docker stack no longer needs a PostgreSQL/pgvector container.
 4. Small local state and the last-known-good public resource snapshot are stored
-   in SQLite and work on Raspberry Pi, Linux, and macOS Docker Desktop.
+  in SQLite and work on client appliances across Raspberry Pi, Linux, and
+  macOS Docker Desktop. The design must not depend on Raspberry Pi hardware.
 5. The production kiosk interface, routes, keypad behavior, and Twilio calling
    experience do not visually change.
 
@@ -118,21 +119,57 @@ Local SQLite last-known-good cache
 The local SQLite database is a disposable cache/state store, not a second
 editable resource directory.
 
+## Actual Website and Backend Wiring
+
+The same frontend and backend source currently serve several deployment roles.
+Do not treat them as one runtime when changing credentials or persistence:
+
+```text
+Client appliance browser
+  -> local nginx/frontend container
+  -> local talkbox-backend container for /api/*
+
+Vercel-hosted frontend
+  -> vercel.json rewrite
+  -> https://talkbox.fly.dev/api/*
+
+CI-built frontend image
+  -> build-time VITE_API_URL
+  -> configured backend, which may be Fly or a Compose backend
+```
+
+The appliance nginx configuration always proxies `/api/*` to its local backend
+container. The kiosk browser therefore does not call Fly directly. The client
+backend must eventually download a public snapshot from Fly using a distinct,
+revocable, read-only client credential and then answer the browser from its
+local SQLite snapshot during an outage.
+
+Only the central Fly role may hold `FSC_RESOURCE_API_KEY` and call Replit.
+The central Fly cache and each client offline snapshot are separate SQLite files
+with separate lifecycles. A Fly cache protects Fly from a Replit outage or
+process restart; a client snapshot protects the kiosk from a Fly or network outage.
+
 ## Environment File Contract
 
 Consolidate configuration around two clearly separated files.
 
 ### `app/.env`: local application runtime
 
-This is the only env file loaded into local Docker services. It may contain
-runtime secrets needed by the backend, including:
+This is the only env file loaded into local Docker services. On a client appliance,
+it must not contain the FSC service credential or a Neon connection string.
+The snapshot client may use a separately scoped Fly credential:
 
 ```dotenv
-FSC_RESOURCE_API_BASE_URL=https://<published-replit-origin>
-FSC_RESOURCE_API_KEY=<service-bearer-key>
 LOCAL_STATE_DATABASE_URL=sqlite+aiosqlite:////data/talkbox.sqlite3
 FSC_RESOURCE_CACHE_PATH=/data/resource-snapshot.sqlite3
+TALKBOX_CENTRAL_API_BASE_URL=https://talkbox.fly.dev
+TALKBOX_CLIENT_SNAPSHOT_KEY=<scoped-read-only-client-key>
 ```
+
+For central Fly deployment, configure `FSC_RESOURCE_API_BASE_URL` and
+`FSC_RESOURCE_API_KEY` as Fly secrets rather than copying an env file. Configure
+`TALKBOX_SNAPSHOT_PUBLISH_KEYS` separately as the comma-separated client keys
+accepted by the Fly snapshot endpoint; do not reuse the FSC service key.
 
 Retain existing Twilio, OpenAI, cookie, kiosk, and local runtime settings that
 are still required. Never commit this file.
@@ -147,9 +184,10 @@ FLY_TOKEN=<operator-token>
 REPLIT_DB=<diagnostic-only-direct-connection-if-still-needed>
 ```
 
-After safely moving the resource origin and bearer key to `app/.env`, remove
-their duplicate runtime copies from root `.env.local`. Do not print values while
-moving them. Do not pass `FLY_TOKEN` or direct Neon credentials into Docker.
+After configuring the canonical resource origin and bearer key as Fly secrets,
+remove duplicate runtime copies from root `.env.local`. Do not print values
+while moving them. Do not pass `FLY_TOKEN`, the FSC service key, or direct Neon
+credentials into client Docker services.
 
 Update `app/.env.example`, README, scripts, and Compose so this ownership is
 obvious. Examples must contain no real secrets. Prefer canonical `FSC_*` names;
@@ -197,8 +235,10 @@ publishes zero services.
 
 ### Phase 2: Implement Persistent SQLite Last-Known-Good Cache
 
-Replace the memory-only cache with a tiny SQLite repository while retaining an
-in-memory snapshot for fast reads.
+First persist Fly's validated cache in a tiny SQLite repository while retaining
+an in-memory snapshot for fast reads. This does not by itself provide client
+outage support; add authenticated Fly publication and a separate client snapshot
+installer before removing the appliance's legacy database.
 
 Suggested table:
 

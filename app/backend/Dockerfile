@@ -27,6 +27,25 @@ COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 
+# ─── whisper.cpp ─────────────────────────────────────────────────────────────
+# Build once for the image architecture (arm64 on Pi, amd64 elsewhere). The
+# model remains outside the image so normal application rebuilds stay small.
+FROM alpine:3.22 AS whisper-builder
+
+ARG WHISPER_CPP_VERSION=v1.7.6
+
+RUN apk add --no-cache build-base cmake git
+RUN git clone --branch "${WHISPER_CPP_VERSION}" --depth 1 \
+            https://github.com/ggerganov/whisper.cpp.git /src \
+        && cmake -S /src -B /src/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_NATIVE=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_SERVER=OFF \
+        && cmake --build /src/build --config Release --target whisper-cli --parallel
+
+
 # ─── Runtime ─────────────────────────────────────────────────────────────────
 # Only Python, libpq (psycopg2 runtime), and curl (healthcheck). No toolchain,
 # no uv, no rust — the venv baked by the builder is self-contained.
@@ -38,7 +57,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache curl ffmpeg libpq iptables
+RUN apk add --no-cache curl ffmpeg libgomp libpq libstdc++ iptables
 
 # ─── Tailscale (userspace) ───────────────────────────────────────────────────
 # Static binaries copied from the official image so the Fly machine can join the
@@ -50,6 +69,7 @@ COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscale  /usr/local/bin/
 RUN mkdir -p /var/run/tailscale /var/lib/tailscale
 
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=whisper-builder /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
 
 COPY backend/src/ ./src/
 COPY backend/alembic/ ./alembic/
