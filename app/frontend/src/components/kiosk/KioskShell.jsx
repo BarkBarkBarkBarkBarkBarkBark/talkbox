@@ -25,8 +25,6 @@ import {
 } from "./KioskGuards.jsx";
 import SimulatedKeypad from "./SimulatedKeypad.jsx";
 
-const INTRO_KEYSTROKES_TO_DISMISS = 2;
-
 function CenterMessage({ title, subtitle, spinner }) {
   return (
     <div className="kiosk-content">
@@ -36,84 +34,6 @@ function CenterMessage({ title, subtitle, spinner }) {
         {subtitle ? <p className="kiosk-subtitle">{subtitle}</p> : null}
       </div>
     </div>
-  );
-}
-
-function IntroHeroPanel({ keystrokes, onDismiss }) {
-  const remaining = Math.max(0, INTRO_KEYSTROKES_TO_DISMISS - keystrokes);
-
-  return (
-    <section
-      className="kiosk-intro-overlay"
-      aria-live="polite"
-      aria-label="Welcome to TalkBox. Tap anywhere to start."
-      onClick={onDismiss}
-    >
-      <div className="kiosk-intro-panel">
-        <header className="kiosk-intro-header">
-          <div>
-            <p className="kiosk-intro-eyebrow">Welcome to</p>
-            <h1>TalkBox</h1>
-          </div>
-          <p className="kiosk-intro-header-note">Two quick paths to help</p>
-        </header>
-
-        <div className="kiosk-intro-grid">
-          <div className="kiosk-intro-primary">
-            <h2>Need shelter?</h2>
-            <ol className="kiosk-intro-steps">
-              <li><span>Press the <strong>big blue button</strong> to call 2-1-1</span></li>
-              <li><span>Choose your language</span></li>
-              <li><span>Press <strong>8</strong> for shelter and housing</span></li>
-              <li><span>Ask for a <strong>Crisis assessment</strong></span></li>
-              <li><span>Tell them <strong>where you are</strong></span></li>
-              <li><span>Share medical needs or disabilities</span></li>
-              <li><span>Say if you do not have a phone</span></li>
-              <li><span>Ask how to follow up</span></li>
-            </ol>
-            <p className="kiosk-intro-note">
-              Shelter may not be available today. Call 2-1-1 again when you can.
-            </p>
-          </div>
-
-          <div className="kiosk-intro-secondary">
-            <h2>Need something else?</h2>
-            <div className="kiosk-intro-action-card kiosk-intro-action-card--white">
-              <span>Press the big white button and ask</span>
-            </div>
-            <p className="kiosk-intro-note">
-              Ask TalkBox:
-            </p>
-            <ul className="kiosk-intro-prompts">
-              <li>"I'm looking for food"</li>
-              <li>"I'm looking for mental health services"</li>
-              <li>"I need medical care"</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="kiosk-intro-safety-row">
-          <p className="kiosk-intro-call-note">
-            You can use this phone to call pre-approved local resources that TalkBox finds.
-          </p>
-          <p className="kiosk-intro-911-warning">
-            This phone WILL NOT CALL 911.
-          </p>
-        </div>
-
-        <footer className="kiosk-intro-footer">
-          <span className="kiosk-intro-key-prompt">
-            {remaining === 1 ? "Press any key one more time" : "Press any key twice"}
-          </span>
-          <span className="kiosk-intro-touch-prompt">Tap anywhere to start</span>
-          <span className="kiosk-intro-progress" aria-hidden="true">
-            {Array.from({ length: INTRO_KEYSTROKES_TO_DISMISS }, (_, index) => (
-              <span key={index} className={index < keystrokes ? "is-filled" : ""} />
-            ))}
-          </span>
-        </footer>
-      </div>
-    </section>
   );
 }
 
@@ -155,39 +75,13 @@ function KioskRuntime({ demo }) {
     dialCall,
   } = machine;
   const [clock, setClock] = useState("");
-  const [introKeystrokes, setIntroKeystrokes] = useState(0);
-  const showIntro = introKeystrokes < INTRO_KEYSTROKES_TO_DISMISS;
-
-  const dismissIntro = useCallback(() => {
-    setIntroKeystrokes(INTRO_KEYSTROKES_TO_DISMISS);
-  }, []);
 
   const handleKeyWithTone = useCallback((key) => {
     playKeyTone(key);
-
-    if (showIntro) {
-      setIntroKeystrokes((count) => Math.min(INTRO_KEYSTROKES_TO_DISMISS, count + 1));
-      return;
-    }
-
     handleKey(key);
-  }, [handleKey, showIntro]);
+  }, [handleKey]);
 
-  useKeypadInput(handleKeyWithTone, { enabled: !showIntro });
-
-  useEffect(() => {
-    if (!showIntro) return undefined;
-
-    function countIntroKey(e) {
-      if (e.repeat) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setIntroKeystrokes((count) => Math.min(INTRO_KEYSTROKES_TO_DISMISS, count + 1));
-    }
-
-    window.addEventListener("keydown", countIntroKey, true);
-    return () => window.removeEventListener("keydown", countIntroKey, true);
-  }, [showIntro]);
+  useKeypadInput(handleKeyWithTone);
 
   // Appliance guards: never active during a live call.
   const callActive = state.screen === SCREENS.CALL_ACTIVE;
@@ -303,7 +197,6 @@ function KioskRuntime({ demo }) {
         </div>
       ) : null}
       <KioskFooterCommands onKey={handleKeyWithTone} hints={footerHints(state)} />
-      {showIntro ? <IntroHeroPanel keystrokes={introKeystrokes} onDismiss={dismissIntro} /> : null}
       {offline && !callActive ? <ReconnectOverlay /> : null}
       {state.callAttention ? (
         <PresenceOverlay

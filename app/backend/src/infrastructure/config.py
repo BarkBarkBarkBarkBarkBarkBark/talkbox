@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,8 +35,14 @@ class Settings(BaseSettings):
     db_table_name: str = Field(default="sacramento", alias="DB_TABLE_NAME")
 
     # ─── Canonical FSC resource API ──────────────────────────────────
-    fsc_resource_api_base_url: str = Field(default="", alias="FSC_RESOURCE_API_BASE_URL")
-    fsc_resource_api_key: str = Field(default="", alias="FSC_RESOURCE_API_KEY")
+    fsc_resource_api_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("FSC_RESOURCE_API_BASE_URL", "REPLIT_ORIGIN_URL"),
+    )
+    fsc_resource_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("FSC_RESOURCE_API_KEY", "FLY_RESOURCE_API_KEY"),
+    )
     fsc_resource_sync_enabled: bool = Field(default=True, alias="FSC_RESOURCE_SYNC_ENABLED")
     fsc_resource_sync_interval_seconds: int = Field(
         default=60, alias="FSC_RESOURCE_SYNC_INTERVAL_SECONDS"

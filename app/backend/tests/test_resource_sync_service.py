@@ -5,12 +5,34 @@ import pytest
 from pydantic import ValidationError
 
 from src.application.services.resource_sync_service import ResourceSyncService
+from src.infrastructure.config import Settings
 from src.infrastructure.fsc_resource_client import (
     BootstrapSnapshot,
     ContentVersion,
     FSCResourceAuthError,
     FSCResourceClient,
 )
+
+
+def test_existing_fly_resource_api_key_is_supported(monkeypatch) -> None:
+    monkeypatch.delenv("FSC_RESOURCE_API_KEY", raising=False)
+    monkeypatch.setenv("FLY_RESOURCE_API_KEY", "existing-fly-key")
+
+    assert Settings(_env_file=None).fsc_resource_api_key == "existing-fly-key"
+
+
+def test_canonical_resource_api_key_takes_precedence(monkeypatch) -> None:
+    monkeypatch.setenv("FSC_RESOURCE_API_KEY", "canonical-key")
+    monkeypatch.setenv("FLY_RESOURCE_API_KEY", "existing-fly-key")
+
+    assert Settings(_env_file=None).fsc_resource_api_key == "canonical-key"
+
+
+def test_existing_replit_origin_url_is_supported(monkeypatch) -> None:
+    monkeypatch.delenv("FSC_RESOURCE_API_BASE_URL", raising=False)
+    monkeypatch.setenv("REPLIT_ORIGIN_URL", "https://resources.example.org")
+
+    assert Settings(_env_file=None).fsc_resource_api_base_url == "https://resources.example.org"
 
 
 def snapshot(version: int = 1, *, approved: bool = True) -> BootstrapSnapshot:
@@ -104,6 +126,19 @@ async def test_failed_refresh_preserves_last_known_good(error: Exception) -> Non
     assert await service.refresh() is False
     assert service.snapshot is original
     assert service.last_error_type == type(error).__name__
+
+
+@pytest.mark.asyncio
+async def test_empty_bootstrap_preserves_last_known_good() -> None:
+    service = ResourceSyncService()
+    original = snapshot(1)
+    service._snapshot = original
+    empty = BootstrapSnapshot(content_version=2)
+    service._client = FakeClient(2, empty)
+
+    assert await service.refresh() is False
+    assert service.snapshot is original
+    assert service.last_error_type == "ValueError"
 
 
 @pytest.mark.asyncio

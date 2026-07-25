@@ -88,6 +88,8 @@ class ResourceSyncService:
                 candidate = await self._client.get_bootstrap()
                 if candidate.content_version != version.content_version:
                     raise ValueError("Bootstrap content version does not match version endpoint")
+                if not candidate.services:
+                    raise ValueError("Bootstrap contains no published TalkBox services")
                 self._snapshot = candidate
                 self.last_successful_sync = datetime.now(UTC)
                 self.last_error_type = None
