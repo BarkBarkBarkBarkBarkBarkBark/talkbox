@@ -2,18 +2,23 @@ from src.infrastructure.seeds.agency_vector_seeder import _document_content
 
 
 def test_document_content_is_stable_and_omits_empty_fields() -> None:
-    agency = {
-        "agency_name": "Example Resource",
+    resource = {
+        "name": "Example Resource",
+        "organization_name": "Example Organization",
         "category": "Food",
         "description": "  Meals every weekday.  ",
         "address": None,
-        "insurance": "",
-        "knowledge_tags": " pantry, meals ",
+        "city": " Sacramento ",
+        "eligibility_text": "",
+        "languages_text": " English, Spanish ",
+        "hours_text": None,
     }
 
-    assert _document_content(agency) == (
-        "Agency: Example Resource\n"
+    assert _document_content(resource) == (
+        "Resource: Example Resource\n"
+        "Organization: Example Organization\n"
         "Category: Food\n"
         "Description: Meals every weekday.\n"
-        "Tags: pantry, meals"
+        "City: Sacramento\n"
+        "Languages: English, Spanish"
     )

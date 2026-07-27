@@ -1,46 +1,52 @@
-"""Build a fresh, versioned pgvector collection from canonical agency rows."""
+"""Build a fresh, versioned pgvector collection from canonical FSC resources."""
 
 from __future__ import annotations
 
+import asyncio
 from hashlib import sha256
 import logging
 
-import psycopg
-from psycopg.rows import dict_row
-
 from src.infrastructure.config import settings
-from src.infrastructure.db import to_sync_dsn
+from src.infrastructure.fsc_resource_client import BootstrapSnapshot, FSCResourceClient
 from src.infrastructure.seeds.vector_seeder import existing_collection_count
 
 logger = logging.getLogger(__name__)
 
 
-def _document_content(agency: dict) -> str:
+def _document_content(resource: dict) -> str:
     fields = (
-        ("Agency", agency["agency_name"]),
-        ("Category", agency.get("category")),
-        ("Description", agency.get("description")),
-        ("Address", agency.get("address")),
-        ("Insurance", agency.get("insurance")),
-        ("Tags", agency.get("knowledge_tags")),
+        ("Resource", resource["name"]),
+        ("Organization", resource.get("organization_name")),
+        ("Category", resource.get("category")),
+        ("Description", resource.get("description")),
+        ("Address", resource.get("address")),
+        ("City", resource.get("city")),
+        ("Eligibility", resource.get("eligibility_text")),
+        ("Languages", resource.get("languages_text")),
+        ("Hours", resource.get("hours_text")),
     )
     return "\n".join(f"{label}: {value.strip()}" for label, value in fields if value)
 
 
-def _load_agencies() -> list[dict]:
-    with psycopg.connect(to_sync_dsn(settings.db_uri), row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT a.id, a.agency_name, a.phone_number, a.address,
-                       a.description, a.insurance, a.knowledge_tags,
-                       c.id AS category_id, c.name AS category
-                FROM agencies a
-                LEFT JOIN categories c ON c.id = a.category_id
-                ORDER BY a.id
-                """
-            )
-            return list(cur.fetchall())
+async def _load_snapshot() -> BootstrapSnapshot:
+    if not settings.fsc_resource_api_base_url or not settings.fsc_resource_api_key:
+        raise RuntimeError(
+            "FSC_RESOURCE_API_BASE_URL and FSC_RESOURCE_API_KEY are required "
+            "to seed canonical resource vectors."
+        )
+    client = FSCResourceClient(
+        settings.fsc_resource_api_base_url,
+        settings.fsc_resource_api_key,
+        settings.fsc_resource_request_timeout_seconds,
+    )
+    try:
+        version = await client.get_version()
+        snapshot = await client.get_bootstrap()
+    finally:
+        await client.close()
+    if snapshot.content_version != version.content_version:
+        raise RuntimeError("Bootstrap content version does not match version endpoint.")
+    return snapshot
 
 
 def seed_agency_vectors() -> int:
@@ -64,9 +70,18 @@ def seed_agency_vectors() -> int:
             "rotate AGENCY_COLLECTION_NAME before rebuilding agency vectors."
         )
 
-    agencies = _load_agencies()
-    if not agencies:
-        raise RuntimeError("Cannot seed agency vectors from an empty agencies table.")
+    snapshot = asyncio.run(_load_snapshot())
+    resources = [
+        service
+        for service in snapshot.services
+        if service.talkbox_visible
+        and (
+            not service.status
+            or service.status.lower() in {"active", "published", "approved"}
+        )
+    ]
+    if not resources:
+        raise RuntimeError("Cannot seed agency vectors from an empty FSC snapshot.")
 
     from langchain_core.documents import Document
     from langchain_postgres import PGVector
@@ -74,16 +89,16 @@ def seed_agency_vectors() -> int:
     from src.infrastructure.llm.factory import get_embeddings
 
     documents = []
-    for agency in agencies:
-        content = _document_content(agency)
+    for resource in resources:
+        content = _document_content(resource.model_dump(mode="json"))
         documents.append(
             Document(
                 page_content=content,
                 metadata={
-                    "type": "agency",
-                    "agency_id": agency["id"],
-                    "category_id": agency.get("category_id"),
-                    "category": agency.get("category"),
+                    "type": "resource",
+                    "resource_id": str(resource.id),
+                    "category": resource.category,
+                    "content_version": snapshot.content_version,
                     "content_sha256": sha256(content.encode("utf-8")).hexdigest(),
                     "embedding_model": settings.embeddings_model,
                 },
@@ -96,10 +111,10 @@ def seed_agency_vectors() -> int:
         connection=settings.db_uri,
         use_jsonb=True,
     )
-    store.add_documents(documents, ids=[str(agency["id"]) for agency in agencies])
+    store.add_documents(documents, ids=[str(resource.id) for resource in resources])
 
     logger.info(
-        "seeded %d agencies into fresh PGVector collection %r",
+        "seeded %d canonical resources into fresh PGVector collection %r",
         len(documents),
         collection_name,
     )

@@ -73,44 +73,61 @@ current authority until cutover.
      python main.py seed-agencies --confirm-replace
    ```
 
-6. Build routing vectors and a fresh agency collection:
+6. Build routing vectors:
 
    ```sh
    DB_URI="$NEON_DIRECT_IMPORTER_URI" \
      COLLECTION_NAME=query_categories \
      python main.py seed-category-vectors
+   ```
 
+7. Publish and validate the FSC TalkBox API against the rehearsal data, then
+   build a fresh canonical resource collection from its authenticated
+   bootstrap:
+
+   ```sh
    DB_URI="$NEON_DIRECT_IMPORTER_URI" \
+     FSC_RESOURCE_API_BASE_URL="$REHEARSAL_FSC_API_BASE_URL" \
+     FSC_RESOURCE_API_KEY="$REHEARSAL_FSC_API_KEY" \
      AGENCY_COLLECTION_NAME=agency_catalog_v1 \
      python main.py seed-agency-vectors
    ```
 
-7. Validate counts, null phone numbers, duplicate names/phones, vector model
+8. Validate counts, null phone numbers, duplicate names/phones, vector model
    metadata, content hashes, and representative semantic searches.
-8. Restart the API repeatedly and prove all counts and a deliberate test edit
+9. Restart the API repeatedly and prove all counts and a deliberate test edit
    remain unchanged.
-9. Delete the rehearsal branch only after results are recorded.
+10. Delete the rehearsal branch only after results are recorded.
 
 ## Production cutover
 
 1. Create and validate a fresh local PostgreSQL dump.
 2. Create a Neon restore point or protected branch before import.
 3. Apply the already-rehearsed migrations to the production branch.
-4. Import and vectorize once using the explicit commands above.
+4. Import and build category-routing vectors using the explicit commands above.
 5. Publish and validate the FSC `/api/v1/talkbox/version` and `/bootstrap`
    endpoints against the curated production data.
-6. Do not configure importer or migrator credentials in Fly runtime secrets.
-7. Configure Fly with `FSC_RESOURCE_API_BASE_URL` and the
+6. Build and validate a fresh `AGENCY_COLLECTION_NAME` from the authenticated
+   production bootstrap, then configure Fly with that name and
+   `RESOURCE_SEARCH_MODE=vector`.
+7. Do not configure importer or migrator credentials in Fly runtime secrets.
+8. Configure Fly with `FSC_RESOURCE_API_BASE_URL` and the
    `FSC_RESOURCE_API_KEY` secret, then verify liveness, sync status, catalog
-   counts, query provenance, and Twilio webhooks.
-8. Keep the Pi's local stack unchanged during the first central API soak test.
-9. Cut one kiosk over first. Retain the known-good local image and database
+   counts, `search_mode=vector`, query relevance, and Twilio webhooks.
+9. Keep the Pi's local stack unchanged during the first central API soak test.
+10. Cut one kiosk over first. Retain the known-good local image and database
    dump until online and offline snapshot behavior passes production testing.
 
 ## Collection rotation
 
-`query_categories` routes requests to needs. `agency_catalog_v1` contains
-agency facts for semantic retrieval. They are intentionally separate.
+`query_categories` routes requests to needs. `agency_catalog_v1` contains FSC
+resource facts for semantic retrieval. They are intentionally separate.
+
+LangChain stores both collections in `langchain_pg_embedding`. The near-text
+vector is in its `embedding` column, the embedded source text is in `document`,
+and canonical `resource_id`, category, content version, model, and content hash
+live in `cmetadata` JSONB. `collection_id` joins
+`langchain_pg_collection.uuid`, whose `name` selects the active collection.
 
 Agency vector generation refuses a nonempty target collection. When catalog
 content or the embedding model changes:

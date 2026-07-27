@@ -39,6 +39,7 @@ class KioskQueryResponse(BaseModel):
     category: str | None = None
     items: list[KioskItem] = Field(default_factory=list)
     empty: bool = False
+    search_mode: str = "none"
     spoken_summary: str = ""
     fallback: KioskItem | None = None
     message: str | None = None
@@ -54,6 +55,7 @@ class KioskMenuItem(BaseModel):
 class KioskConfigResponse(BaseModel):
     name: str
     mock_mode: bool
+    resource_search_mode: str
     idle_reset_seconds: int
     calling_enabled: bool
     speech_enabled: bool
@@ -125,6 +127,7 @@ def kiosk_config() -> KioskConfigResponse:
     return KioskConfigResponse(
         name="Talk Box",
         mock_mode=settings.kiosk_mock_query,
+        resource_search_mode=settings.resource_search_mode,
         idle_reset_seconds=settings.kiosk_idle_reset_seconds,
         calling_enabled=settings.kiosk_calling_enabled,
         speech_enabled=settings.kiosk_stt_enabled,
@@ -141,10 +144,11 @@ async def kiosk_query(payload: KioskQueryRequest) -> KioskQueryResponse:
     logger.info("kiosk query: %r", payload.query)
     result = kiosk_query_service.query(payload.query)
     logger.info(
-        "kiosk query result: category=%s items=%d empty=%s",
+        "kiosk query result: category=%s items=%d empty=%s search_mode=%s",
         result.get("category"),
         len(result.get("items") or []),
         result.get("empty"),
+        result.get("search_mode"),
     )
     return KioskQueryResponse(**result)
 

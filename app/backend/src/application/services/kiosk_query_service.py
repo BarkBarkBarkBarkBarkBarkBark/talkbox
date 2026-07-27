@@ -21,6 +21,9 @@ from collections.abc import Callable
 from src.application.services.query_handler import QueryHandler
 from src.application.services.resource_sync_service import resource_sync_service
 from src.infrastructure.config import settings
+from src.infrastructure.vector_store.pgvector_resource_retriever import (
+    PGVectorResourceRetriever,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +93,13 @@ def _format_phone(raw: str | None) -> str | None:
 class KioskQueryService:
     """Adapts :class:`QueryHandler` output for keypad-first kiosk screens."""
 
-    def __init__(self, query_handler: QueryHandler | Callable[[], QueryHandler]):
+    def __init__(
+        self,
+        query_handler: QueryHandler | Callable[[], QueryHandler],
+        resource_retriever: PGVectorResourceRetriever | None = None,
+    ):
         self._handler_provider = query_handler
+        self._resource_retriever = resource_retriever or PGVectorResourceRetriever()
 
     @property
     def _handler(self) -> QueryHandler:
@@ -105,18 +113,44 @@ class KioskQueryService:
             return self._empty_payload()
 
         if settings.kiosk_mock_query:
-            return self._mock_query(text)
+            return self._mock_query(text, search_mode="mock")
 
         if resource_sync_service.snapshot is not None:
+            if settings.resource_search_mode.lower() == "vector":
+                try:
+                    resource_ids = self._resource_retriever.retrieve_resource_ids(
+                        text, MAX_ITEMS
+                    )
+                    category, canonical_items = resource_sync_service.query_by_resource_ids(
+                        resource_ids, MAX_ITEMS
+                    )
+                    items = self._number_items(canonical_items)
+                    if items:
+                        return self._payload(category, items, search_mode="vector")
+                    logger.warning(
+                        "resource_vector_search_unmapped collection=%s matches=%d",
+                        settings.agency_collection_name,
+                        len(resource_ids),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "resource_vector_search_failed collection=%s error_class=%s",
+                        settings.agency_collection_name,
+                        type(exc).__name__,
+                    )
             category, canonical_items = resource_sync_service.query(text, MAX_ITEMS)
             items = self._number_items(canonical_items)
-            return self._payload(category, items) if items else self._empty_payload()
+            return (
+                self._payload(category, items, search_mode="lexical_fallback")
+                if items
+                else self._empty_payload(search_mode="lexical_fallback")
+            )
 
         try:
             result = self._run_structured_query(text)
         except Exception:
             logger.exception("kiosk query failed; falling back to mock catalog")
-            return self._mock_query(text)
+            return self._mock_query(text, search_mode="mock_fallback")
 
         return self._normalize(result)
 
@@ -139,7 +173,9 @@ class KioskQueryService:
     def _normalize(self, result: dict) -> dict:
         payload = result.get("results")
         if not payload:
-            return self._empty_payload(result.get("response"))
+            return self._empty_payload(
+                result.get("response"), search_mode="category_vector_sql"
+            )
 
         category = payload.get("category")
         raw_items: list[dict]
@@ -150,8 +186,10 @@ class KioskQueryService:
 
         items = self._number_items(raw_items)
         if not items:
-            return self._empty_payload(result.get("response"))
-        return self._payload(category, items)
+            return self._empty_payload(
+                result.get("response"), search_mode="category_vector_sql"
+            )
+        return self._payload(category, items, search_mode="category_vector_sql")
 
     @staticmethod
     def _agency_to_item(a: dict) -> dict:
@@ -174,13 +212,13 @@ class KioskQueryService:
         }
 
     # ─── Mock pipeline ───────────────────────────────────────────────────
-    def _mock_query(self, text: str) -> dict:
+    def _mock_query(self, text: str, search_mode: str = "mock") -> dict:
         key = self._match_keyword(text)
         entry = _MOCK_CATALOG.get(key) if key else None
         if not entry:
-            return self._empty_payload()
+            return self._empty_payload(search_mode=search_mode)
         items = self._number_items([dict(i) for i in entry["items"]])
-        return self._payload(entry["category"], items)
+        return self._payload(entry["category"], items, search_mode=search_mode)
 
     @staticmethod
     def _match_keyword(text: str) -> str | None:
@@ -212,7 +250,9 @@ class KioskQueryService:
             )
         return items
 
-    def _payload(self, category: str | None, items: list[dict]) -> dict:
+    def _payload(
+        self, category: str | None, items: list[dict], search_mode: str
+    ) -> dict:
         names = ", ".join(i["name"] for i in items[:3])
         summary = (
             f"Found {len(items)} {category or 'resource'} option"
@@ -222,15 +262,19 @@ class KioskQueryService:
             "category": category,
             "items": items,
             "empty": False,
+            "search_mode": search_mode,
             "spoken_summary": summary,
             "fallback": self._fallback_item(),
         }
 
-    def _empty_payload(self, message: str | None = None) -> dict:
+    def _empty_payload(
+        self, message: str | None = None, search_mode: str = "none"
+    ) -> dict:
         return {
             "category": None,
             "items": [],
             "empty": True,
+            "search_mode": search_mode,
             "spoken_summary": (
                 "I could not find a match. You can call 211 for help finding "
                 "shelter, food, or other services."

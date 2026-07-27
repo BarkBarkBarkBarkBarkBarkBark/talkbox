@@ -156,6 +156,40 @@ def test_unapproved_direct_phone_is_not_exposed() -> None:
     assert items[0]["callable"] is False
 
 
+def test_vector_resource_ids_preserve_similarity_order_and_call_safety() -> None:
+    service = ResourceSyncService()
+    service._snapshot = BootstrapSnapshot.model_validate(
+        {
+            "content_version": 1,
+            "services": [
+                {
+                    "id": "resource-1",
+                    "service_name": "Food Pantry",
+                    "category": "Food",
+                    "phone": "916-555-0100",
+                    "allow_call": False,
+                },
+                {
+                    "id": "resource-2",
+                    "service_name": "Community Kitchen",
+                    "category": "Food",
+                    "phone": "916-555-0200",
+                    "allow_call": True,
+                },
+            ],
+        }
+    )
+
+    category, items = service.query_by_resource_ids(
+        ["resource-2", "missing", "resource-1"]
+    )
+
+    assert category == "Food"
+    assert [item["name"] for item in items] == ["Community Kitchen", "Food Pantry"]
+    assert items[0]["phone"] == "916-555-0200"
+    assert items[1]["phone"] is None
+
+
 def test_malformed_bootstrap_is_rejected() -> None:
     with pytest.raises(ValidationError):
         BootstrapSnapshot.model_validate({"resources": [{"name": "Missing ID"}]})

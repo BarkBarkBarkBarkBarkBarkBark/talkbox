@@ -197,6 +197,17 @@ python main.py seed-agencies --confirm-replace
 python main.py seed-agencies --confirm-replace --csv /path/to/alt.csv
 ```
 
+`seed-agency-vectors` downloads the authenticated FSC TalkBox bootstrap,
+embeds each published and visible resource, and writes its canonical
+`resource_id` into vector metadata. It requires `DB_URI`,
+`FSC_RESOURCE_API_BASE_URL`, `FSC_RESOURCE_API_KEY`, and the configured
+embeddings-provider credentials. Seed a fresh `AGENCY_COLLECTION_NAME`, verify
+it, then deploy that collection name with `RESOURCE_SEARCH_MODE=vector`.
+
+Kiosk query responses include `search_mode`. A value of `vector` confirms
+near-text retrieval; `lexical_fallback` means the collection was unavailable,
+empty, stale, or did not map to the current FSC snapshot.
+
 Inside a running container:
 
 ```bash

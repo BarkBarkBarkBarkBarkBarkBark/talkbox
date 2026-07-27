@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     agency_collection_name: str = Field(
         default="agency_catalog_v1", alias="AGENCY_COLLECTION_NAME"
     )
+    resource_search_mode: str = Field(default="vector", alias="RESOURCE_SEARCH_MODE")
 
     # ─── Persistence ──────────────────────────────────────────────────
     db_uri: str = Field(default="", alias="DB_URI")
