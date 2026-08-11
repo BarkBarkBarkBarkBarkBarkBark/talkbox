@@ -12,7 +12,6 @@ import KioskFooterCommands from "./KioskFooterCommands.jsx";
 import KioskTabs from "./KioskTabs.jsx";
 import KioskAskHome from "./KioskAskHome.jsx";
 import KioskDialPad from "./KioskDialPad.jsx";
-import KioskMenu from "./KioskMenu.jsx";
 import KioskResourceList from "./KioskResourceList.jsx";
 import KioskResourceDetail from "./KioskResourceDetail.jsx";
 import { KioskCallActive, KioskCallConfirm } from "./KioskCallScreen.jsx";
@@ -69,7 +68,7 @@ function KioskRuntime({ demo }) {
     state,
     handleKey,
     setTab,
-    selectMenuEntry,
+    selectItem,
     dialDelete,
     dialClear,
     dialCall,
@@ -80,6 +79,14 @@ function KioskRuntime({ demo }) {
     playKeyTone(key);
     handleKey(key);
   }, [handleKey]);
+
+  const openListItem = useCallback(
+    (item) => {
+      playKeyTone("#");
+      selectItem(item);
+    },
+    [selectItem],
+  );
 
   useKeypadInput(handleKeyWithTone);
 
@@ -104,13 +111,22 @@ function KioskRuntime({ demo }) {
     return () => clearInterval(id);
   }, []);
 
-  const onHome = state.screen === SCREENS.ASK_HOME;
+  const showTabs =
+    state.screen === SCREENS.ASK_HOME ||
+    (state.screen === SCREENS.RESULTS_LIST && state.directoryMode) ||
+    (state.screen === SCREENS.LOADING && state.tab === TABS.BROWSE);
 
   function renderScreen() {
     switch (state.screen) {
       case SCREENS.ASK_HOME:
         if (state.tab === TABS.BROWSE) {
-          return <KioskMenu menu={state.menu} cursor={state.cursor} onMenuEntry={selectMenuEntry} />;
+          return (
+            <CenterMessage
+              title="Loading organizations…"
+              subtitle="Preparing the full service list."
+              spinner
+            />
+          );
         }
         if (state.tab === TABS.DIAL) {
           return (
@@ -134,7 +150,12 @@ function KioskRuntime({ demo }) {
           />
         );
       case SCREENS.LOADING:
-        return <CenterMessage title="Searching…" spinner />;
+        return (
+          <CenterMessage
+            title={state.tab === TABS.BROWSE ? "Loading organizations…" : "Searching…"}
+            spinner
+          />
+        );
       case SCREENS.RESULTS_LIST:
         return (
           <KioskResourceList
@@ -142,6 +163,8 @@ function KioskRuntime({ demo }) {
             items={state.items}
             cursor={state.cursor}
             lastQuery={state.lastQuery}
+            directory={state.directoryMode}
+            onSelectItem={openListItem}
             onKey={handleKeyWithTone}
           />
         );
@@ -162,8 +185,12 @@ function KioskRuntime({ demo }) {
       case SCREENS.EMPTY:
         return (
           <CenterMessage
-            title="No match found"
-            subtitle="Press 9 to call the 211 help line, or * to ask again."
+            title={state.directoryMode ? "No organizations" : "No match found"}
+            subtitle={
+              state.directoryMode
+                ? "Press Back to return home."
+                : "Press 9 to call the 211 help line, or * to ask again."
+            }
           />
         );
       case SCREENS.ERROR:
@@ -187,11 +214,16 @@ function KioskRuntime({ demo }) {
         clock={clock}
       />
       <HardwareBanner micMissing={micMissing} speakerMissing={speakerMissing} />
-      {onHome ? <KioskTabs tab={state.tab} onTab={setTab} /> : null}
-      <div className="kiosk-screen" key={`${state.screen}-${state.tab}`}>
+      {showTabs ? (
+        <KioskTabs
+          tab={state.directoryMode ? TABS.BROWSE : state.tab}
+          onTab={setTab}
+        />
+      ) : null}
+      <div className="kiosk-screen" key={`${state.screen}-${state.tab}-${state.directoryMode}`}>
         {renderScreen()}
       </div>
-      {demo && !(onHome && state.tab === TABS.DIAL) ? (
+      {demo && !(state.screen === SCREENS.ASK_HOME && state.tab === TABS.DIAL) ? (
         <div className="kiosk-keypad-tray">
           <SimulatedKeypad onKey={handleKeyWithTone} variant="full" />
         </div>
@@ -240,13 +272,14 @@ function footerHints(state) {
   if (state.screen === SCREENS.ASK_HOME && state.tab === TABS.BROWSE) {
     return [
       { key: "CYCLE_TAB", display: "/", label: "Change tab" },
-      { key: "PREV", display: "–", label: "Up" },
-      { key: "NEXT", display: "+", label: "Down" },
-      { key: "#", display: "↵", label: "Open" },
+      { key: "BS", display: "⌫", label: "Back" },
     ];
   }
   if (state.screen === SCREENS.RESULTS_LIST) {
     return [
+      ...(state.directoryMode
+        ? [{ key: "CYCLE_TAB", display: "/", label: "Change tab" }]
+        : []),
       { key: "PREV", display: "–", label: "Up" },
       { key: "NEXT", display: "+", label: "Down" },
       { key: "#", display: "↵", label: "Open" },

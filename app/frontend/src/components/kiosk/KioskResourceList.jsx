@@ -1,29 +1,78 @@
-// Numbered resource results. Press N (or tap a row) to open the detail screen,
-// or use – / + to move the highlight and Enter to open. The asked question is
-// echoed so the single-turn flow stays legible.
-export default function KioskResourceList({ category, items, cursor = 0, lastQuery, onKey }) {
+import { useEffect, useRef } from "react";
+
+// Numbered resource results / flat directory. Tap a row or press N (1–9) to
+// open detail; use – / + to move and Enter to open. Ask-tab search still
+// echoes the last question above the title.
+export default function KioskResourceList({
+  category,
+  items,
+  cursor = 0,
+  lastQuery,
+  directory = false,
+  onSelectItem,
+  onKey,
+}) {
+  const rowRefs = useRef([]);
+
+  useEffect(() => {
+    const el = rowRefs.current[cursor];
+    if (el) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [cursor, items.length]);
+
+  const longList = items.length > 9;
+  const title = category || (directory ? "All services" : "Results");
+  const subtitle =
+    directory || longList ? (
+      <>
+        Use <strong>–</strong> / <strong>+</strong> to move and{" "}
+        <strong>Enter</strong> to open
+        {items.length > 9 ? "; numbers 1–9 open the first nine" : ""}.
+      </>
+    ) : (
+      <>
+        Press a number, or use <strong>–</strong> / <strong>+</strong> to move and{" "}
+        <strong>Enter</strong> to open.
+      </>
+    );
+
   return (
     <div className="kiosk-content">
-      {lastQuery ? (
+      {lastQuery && !directory ? (
         <p className="kiosk-asked">
           You asked: <em>“{lastQuery}”</em>
         </p>
       ) : null}
-      <h1 className="kiosk-title">{category || "Results"}</h1>
-      <p className="kiosk-subtitle">
-        Press a number, or use <strong>–</strong> / <strong>+</strong> to move and{" "}
-        <strong>Enter</strong> to open.
-      </p>
+      <h1 className="kiosk-title">{title}</h1>
+      <p className="kiosk-subtitle">{subtitle}</p>
       <div className="kiosk-list">
         {items.map((item, i) => (
           <button
-            key={item.number}
+            key={item.number ?? i}
             type="button"
+            ref={(el) => {
+              rowRefs.current[i] = el;
+            }}
             className={`kiosk-row ${i === cursor ? "is-selected" : ""}`}
             aria-current={i === cursor}
-            onClick={() => onKey?.(String(item.number))}
+            onClick={() => {
+              if (onSelectItem) {
+                onSelectItem(item);
+              } else if (item.number >= 1 && item.number <= 9) {
+                onKey?.(String(item.number));
+              } else {
+                onKey?.("#");
+              }
+            }}
           >
-            <span className="kiosk-key-badge">{item.number}</span>
+            {item.number >= 1 && item.number <= 9 ? (
+              <span className="kiosk-key-badge">{item.number}</span>
+            ) : (
+              <span className="kiosk-key-badge kiosk-key-badge-muted" aria-hidden>
+                {item.number}
+              </span>
+            )}
             <span className="kiosk-row-body">
               <span className="kiosk-row-title">{item.name}</span>
               {item.description ? (

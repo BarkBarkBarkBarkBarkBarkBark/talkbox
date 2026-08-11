@@ -902,12 +902,17 @@
   margin: 0 0 clamp(0.75rem, 2.5vh, 1.25rem);
 }
 
-/* Numbered menu / result rows — each maps to one number key. */
+/* Numbered menu / result rows — each maps to one number key.
+   flex + min-height:0 makes this the only vertical scroller inside
+   .kiosk-content (which clips children with overflow:hidden). */
 .kiosk-list {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: clamp(0.4rem, 1.4vh, 0.75rem);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kiosk-row {
@@ -950,6 +955,12 @@
   font-weight: 700;
 }
 
+.kiosk-key-badge-muted {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: clamp(0.75rem, 2.2vh, 1rem);
+}
+
 .kiosk-row-body {
   min-width: 0;
 }
@@ -964,9 +975,11 @@
   font-size: clamp(1rem, 2.45vh, 1.22rem);
   font-weight: 650;
   color: hsl(var(--muted-foreground));
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .kiosk-row-body {

@@ -153,6 +153,20 @@ async def kiosk_query(payload: KioskQueryRequest) -> KioskQueryResponse:
     return KioskQueryResponse(**result)
 
 
+@router.get("/directory", response_model=KioskQueryResponse)
+async def kiosk_directory() -> KioskQueryResponse:
+    """Flat A–Z organization directory for the Browse tab."""
+    await resource_sync_service.ensure_available()
+    result = kiosk_query_service.directory()
+    logger.info(
+        "kiosk directory: items=%d empty=%s search_mode=%s",
+        len(result.get("items") or []),
+        result.get("empty"),
+        result.get("search_mode"),
+    )
+    return KioskQueryResponse(**result)
+
+
 @router.post("/speech/transcribe", response_model=KioskSpeechResponse)
 async def kiosk_speech_transcribe(audio: UploadFile = File(...)) -> KioskSpeechResponse:
     uploaded = await audio.read(settings.kiosk_stt_max_upload_bytes + 1)

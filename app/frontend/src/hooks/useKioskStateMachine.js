@@ -9,14 +9,14 @@ import { useVoiceSearch } from "./useVoiceSearch.js";
 // ("1".."9", "0", "*", "#"). The same machine backs the physical ATM keypad,
 // a laptop keyboard, and the on-screen simulated keypad.
 //
-// The home surface is chat-first (chat-first): an open-ended
-// "what do you need?" input is the primary screen, with a Browse tab that
-// lists the numbered category menu for keypad-only users.
+// The home surface is chat-first: an open-ended "what do you need?" input is
+// the primary Ask tab. Browse loads a flat A–Z organization directory (name +
+// description). Dial is free-form allowlisted dialing.
 //
 // Screens:
-//   ASK_HOME        chat-first home; ask tab = free-text input, browse tab = menu
-//   LOADING         awaiting backend
-//   RESULTS_LIST    numbered resources, press N to select
+//   ASK_HOME        chat-first home; ask tab = free-text input, dial tab = pad
+//   LOADING         awaiting backend (search or directory)
+//   RESULTS_LIST    numbered resources / directory, cursor + Enter to select
 //   RESOURCE_DETAIL one focused resource, # to call
 //   CALL_CONFIRM    confirm before dialing (no arbitrary dialing)
 //   CALL_ACTIVE     simulated/active call, Backspace to hang up
@@ -55,7 +55,7 @@ function nextTab(tab) {
 
 function describeTab(tab) {
   if (tab === TABS.BROWSE)
-    return "Browse menu. Use minus and plus to move, Enter to open.";
+    return "Browse organizations. Use minus and plus to scroll, Enter to open one.";
   if (tab === TABS.DIAL)
     return "Dial pad. Enter a phone number, then press Enter to call.";
   return "Ask. Press star to speak, or press 9 to call 211.";
@@ -74,6 +74,7 @@ const initialState = {
   category: null,
   cursor: 0,
   items: [],
+  directoryMode: false,
   fallback: null,
   selected: null,
   spokenSummary: "",
@@ -92,7 +93,18 @@ function reducer(state, action) {
     case "SET_QUERY":
       return { ...state, query: action.query };
     case "SET_TAB":
-      return { ...state, screen: SCREENS.ASK_HOME, tab: action.tab, cursor: 0, error: null };
+      return {
+        ...state,
+        screen: SCREENS.ASK_HOME,
+        tab: action.tab,
+        cursor: 0,
+        error: null,
+        directoryMode: false,
+        // Leaving Browse clears the directory list so Ask is clean.
+        items: action.tab === TABS.BROWSE ? state.items : [],
+        lastQuery: action.tab === TABS.BROWSE ? state.lastQuery : "",
+        category: action.tab === TABS.BROWSE ? state.category : null,
+      };
     case "MOVE_CURSOR": {
       const len = action.length;
       if (!len || len <= 0) return state;
@@ -103,7 +115,14 @@ function reducer(state, action) {
       return { ...state, cursor: next };
     }
     case "GO_HOME":
-      return { ...state, screen: SCREENS.ASK_HOME, callStatus: "idle", callAttention: 0, error: null };
+      return {
+        ...state,
+        screen: SCREENS.ASK_HOME,
+        callStatus: "idle",
+        callAttention: 0,
+        error: null,
+        directoryMode: false,
+      };
     case "DIAL_APPEND":
       if (state.dialNumber.length >= MAX_DIAL_DIGITS) return state;
       return { ...state, dialNumber: state.dialNumber + action.digit };
@@ -112,12 +131,18 @@ function reducer(state, action) {
     case "DIAL_CLEAR":
       return { ...state, dialNumber: "" };
     case "LOADING":
-      return { ...state, screen: SCREENS.LOADING, error: null };
+      return {
+        ...state,
+        screen: SCREENS.LOADING,
+        error: null,
+        // Keep tab so Browse can show "Loading organizations…".
+        directoryMode: false,
+      };
     case "RESULTS":
       return {
         ...state,
         screen: action.items.length ? SCREENS.RESULTS_LIST : SCREENS.EMPTY,
-        lastQuery: action.query || state.lastQuery,
+        lastQuery: action.directory ? "" : action.query || state.lastQuery,
         category: action.category,
         items: action.items,
         cursor: 0,
@@ -125,6 +150,8 @@ function reducer(state, action) {
         spokenSummary: action.spokenSummary,
         selected: null,
         error: null,
+        directoryMode: Boolean(action.directory),
+        tab: action.directory ? TABS.BROWSE : state.tab,
       };
     case "SELECT":
       return { ...state, screen: SCREENS.RESOURCE_DETAIL, selected: action.item };
@@ -149,7 +176,7 @@ function reducer(state, action) {
         callAttention: 0,
       };
     case "ERROR":
-      return { ...state, screen: SCREENS.ERROR, error: action.error };
+      return { ...state, screen: SCREENS.ERROR, error: action.error, directoryMode: false };
     case "RESET":
       return { ...initialState, config: state.config, menu: state.menu };
     default:
@@ -176,6 +203,12 @@ function describeScreen(state) {
         return describeTab(TABS.DIAL);
       return describeTab(TABS.ASK);
     case SCREENS.RESULTS_LIST:
+      if (state.directoryMode) {
+        return (
+          state.spokenSummary ||
+          "All services. Use minus and plus to scroll, Enter to open an organization."
+        );
+      }
       return (
         state.spokenSummary ||
         "Here are your results. Press a number to choose one, or use minus and plus to move and Enter to open."
@@ -312,6 +345,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
           category: data.category || null,
           fallback: data.fallback || null,
           spokenSummary: data.spoken_summary || "",
+          directory: false,
         });
         announce(data.spoken_summary || "");
       } catch (err) {
@@ -322,17 +356,47 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     [announce, armIdleTimer],
   );
 
+  const loadDirectory = useCallback(async () => {
+    cancelSpeech();
+    armIdleTimer();
+    dispatch({ type: "LOADING" });
+    kioskApi.logEvent({ event_type: "directory", payload: {} });
+    try {
+      const data = await kioskApi.directory();
+      dispatch({
+        type: "RESULTS",
+        items: data.items || [],
+        category: data.category || "All services",
+        fallback: data.fallback || null,
+        spokenSummary:
+          data.spoken_summary ||
+          `Showing ${data.items?.length || 0} organizations. Use minus and plus to scroll.`,
+        directory: true,
+      });
+      announce(
+        data.spoken_summary ||
+          "Browse organizations. Use minus and plus to scroll, Enter to open one.",
+      );
+    } catch (err) {
+      dispatch({ type: "ERROR", error: err.message || "Directory failed." });
+      announce("Could not load organizations. Press Back to start over.");
+    }
+  }, [announce, armIdleTimer]);
+
   const setTab = useCallback(
     (tab) => {
       armIdleTimer();
       kioskApi.logEvent({ event_type: "tab", payload: { tab } });
       dispatch({ type: "SET_TAB", tab });
+      if (tab === TABS.BROWSE) {
+        loadDirectory();
+      }
     },
-    [armIdleTimer],
+    [armIdleTimer, loadDirectory],
   );
 
-  // Shared handler for menu entries — used by the Browse tab, the quick
-  // chips on the Ask tab, and digit keys when the input is empty.
+  // Shared handler for menu entries — used by the quick chips on the Ask tab
+  // and digit keys when the input is empty.
   const selectMenuEntry = useCallback(
     (entry) => {
       if (!entry) return;
@@ -353,6 +417,16 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       }
     },
     [announce, armIdleTimer, runQuery],
+  );
+
+  const selectItem = useCallback(
+    (item) => {
+      if (!item) return;
+      armIdleTimer();
+      dispatch({ type: "SELECT", item });
+      announce(`${item.name}. ${item.description || ""}`);
+    },
+    [announce, armIdleTimer],
   );
 
   // ─── Dial pad ────────────────────────────────────────────────────────
@@ -577,12 +651,14 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       // CYCLE_TAB / DIAL: "/" cycles home tabs (Ask → Browse → Dial); "."
       // jumps straight to Dial. Inert during a live call.
       if (key === "CYCLE_TAB" && s.screen !== SCREENS.CALL_ACTIVE) {
-        if (s.screen !== SCREENS.ASK_HOME) {
+        const onDirectory =
+          s.screen === SCREENS.RESULTS_LIST && s.directoryMode;
+        if (s.screen !== SCREENS.ASK_HOME && !onDirectory) {
           dispatch({ type: "RESET" });
           announce(describeTab(TABS.ASK));
           return;
         }
-        const tab = nextTab(s.tab);
+        const tab = nextTab(onDirectory ? TABS.BROWSE : s.tab);
         setTab(tab);
         announce(describeTab(tab));
         return;
@@ -599,15 +675,14 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       if (key === "PREV" || key === "NEXT") {
         const delta = key === "NEXT" ? 1 : -1;
         let list = null;
-        if (s.screen === SCREENS.ASK_HOME && s.tab === TABS.BROWSE) list = s.menu;
-        else if (s.screen === SCREENS.RESULTS_LIST) list = s.items;
+        if (s.screen === SCREENS.RESULTS_LIST) list = s.items;
         if (list && list.length) {
           dispatch({ type: "MOVE_CURSOR", delta, length: list.length });
           let idx = s.cursor + delta;
           if (idx < 0) idx = 0;
           if (idx > list.length - 1) idx = list.length - 1;
           const item = list[idx];
-          if (item) announce(item.label || item.name || "");
+          if (item) announce(item.name || item.label || "");
         }
         return;
       }
@@ -641,30 +716,30 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             }
             return;
           }
-          if (key === "BS") {
-            if (s.tab === TABS.BROWSE) {
+          // Browse tab loads into RESULTS_LIST; if we are still on ASK_HOME
+          // with browse selected, ignore list keys (loading path).
+          if (s.tab === TABS.BROWSE) {
+            if (key === "BS") {
               dispatch({ type: "SET_TAB", tab: TABS.ASK });
             }
             return;
           }
+          if (key === "BS") {
+            return;
+          }
           if (key === "#") {
-            // OK / Enter on the Browse tab opens the highlighted category.
-            if (s.tab === TABS.BROWSE) selectMenuEntry(s.menu[s.cursor]);
             return;
           }
           const n = Number(key);
           if (n >= 1 && n <= 9) {
             if (n === 9) {
-              // 9 always reaches 211 — even if the menu config failed to load,
-              // selectMenuEntry falls back to the built-in 211 help line.
+              // 9 always reaches 211 — even if the menu config failed to load.
               selectMenuEntry(
                 s.menu.find((m) => m.action === "CALL_211") || { action: "CALL_211" },
               );
               return;
             }
-            // Digits jump straight to a numbered menu entry. This keeps the
-            // beloved "press 9 to call 211" shortcut working on the Ask tab,
-            // and drives the numbered categories on the Browse tab.
+            // Digits jump to numbered quick-action menu entries on Ask.
             selectMenuEntry(
               s.menu.find((m) => Number(m.key) === n || String(m.key) === String(n)),
             );
@@ -674,11 +749,15 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
         case SCREENS.RESULTS_LIST: {
           if (key === "BS") {
-            dispatch({ type: "RESET" });
+            if (s.directoryMode) {
+              dispatch({ type: "SET_TAB", tab: TABS.ASK });
+            } else {
+              dispatch({ type: "RESET" });
+            }
             return;
           }
           if (key === "#") {
-            // OK / Enter opens the highlighted resource.
+            // OK / Enter opens the highlighted resource (any list length).
             const item = s.items[s.cursor];
             if (item) {
               dispatch({ type: "SELECT", item });
@@ -769,6 +848,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       armPresenceTimer,
       dialCall,
       hangUp,
+      loadDirectory,
       runQuery,
       runVoiceSearch,
       selectMenuEntry,
@@ -789,9 +869,11 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     handleKey,
     runQuery,
     runVoiceSearch,
+    loadDirectory,
     setQuery,
     setTab,
     selectMenuEntry,
+    selectItem,
     dialCall,
     dialDelete,
     dialClear,

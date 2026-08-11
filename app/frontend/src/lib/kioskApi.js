@@ -36,6 +36,9 @@ export const kioskApi = {
       body: JSON.stringify({ query: q }),
     }),
 
+  // Flat A–Z organization directory for the Browse tab.
+  directory: () => request("/api/kiosk/directory"),
+
   transcribeAudio: async (blob) => {
     const form = new FormData();
     form.append("audio", blob, "kiosk-voice.webm");

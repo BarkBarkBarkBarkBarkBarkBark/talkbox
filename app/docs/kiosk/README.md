@@ -17,21 +17,23 @@ always loads `/kiosk`.
   preview (for local review when `/` is the kiosk).
 - **Chat-first home** — the main surface is an open-ended "What do you need?"
   input (original Talk Box style). Single turn: ask → numbered results → press a
-  number → call. A **Browse services** tab lists the numbered category menu,
-  and numbered quick chips under the input give keypad-only users a shortcut
-  while the input is empty.
+  number → call. Numbered quick chips under the input still give keypad-only
+  shortcuts while empty.
+- **Browse directory** — the Browse tab loads a flat A–Z list of organizations
+  (`GET /api/kiosk/directory`) with **name + description**. Scroll with `–` / `+`
+  (or touch/wheel); Enter opens detail. Category funnels are no longer the
+  Browse path. List area scrolls when more than a few rows fill the window.
 - **Keypad state machine** — deterministic navigation across screens:
-  `ASK_HOME (ask | browse tabs) → RESULTS_LIST → RESOURCE_DETAIL →
-  CALL_CONFIRM → CALL_ACTIVE`, plus `EMPTY` / `ERROR`. Inactivity auto-resets
-  to the ask screen.
+  `ASK_HOME (ask | dial) · Browse → RESULTS_LIST (directory or search) →
+  RESOURCE_DETAIL → CALL_CONFIRM → CALL_ACTIVE`, plus `EMPTY` / `ERROR`.
+  Inactivity auto-resets to the ask screen.
 - **Push-button voice search** — on the Ask tab, `*` records a short request,
   posts it to `POST /api/kiosk/speech/transcribe`, inserts the transcript into
   the Ask field, and runs the existing kiosk search. Other screens keep
   `*` repeat/help behavior; live calls keep `*` as DTMF.
-- **Numbered, structured results** — `POST /api/kiosk/query` routes the query
-  with embedding similarity (pgvector) and a plain SQL lookup, then returns
-  compact, numbered (1–9), display-safe resources with truncated descriptions
-  and a 211 fallback. **No LLM-generated text is ever shown on the kiosk** —
+- **Numbered search results** — `POST /api/kiosk/query` routes an Ask query and
+  returns up to nine display-safe resources (name + description) with a 211
+  fallback. **No LLM-generated text is ever shown on the kiosk** —
   the Healthscout LLM-extraction branch of the web pipeline is bypassed here
   on purpose, since kiosk users may be in crisis and false information must be
   minimized.
@@ -51,10 +53,11 @@ The admin/partner chat console is intentionally separate from the kiosk.
 
 | Key   | Meaning                                  |
 | ----- | ---------------------------------------- |
-| `1`–`9` | Select the visible menu item / resource (on the ask screen, digits act as category shortcuts while the input is empty) |
+| `1`–`9` | Open resource #1–9 when shown (Ask shortcuts + first nine directory/search rows) |
+| `–`/`+` | Move highlight up/down in directory and result lists |
 | `0`   | Back / home (clears the input on the ask screen) |
 | `*`   | Speak on Ask; repeat / help elsewhere; DTMF during active calls |
-| `#`   | Search / select / confirm call           |
+| `#`   | Search / open highlighted item / confirm call |
 
 Keyboard aliases for laptop testing: `Enter` = `#`, `Escape`/`Backspace` = `0`,
 `/` = `*`. The number row works directly.

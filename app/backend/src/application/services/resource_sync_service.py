@@ -166,6 +166,39 @@ class ResourceSyncService:
                 return service.name
         return None
 
+    def directory(self) -> list[dict]:
+        """All talkbox-visible services sorted by name (A–Z) for kiosk Browse."""
+        if self._snapshot is None:
+            return []
+        services = [
+            service
+            for service in self._snapshot.services
+            if service.talkbox_visible
+            and (
+                not service.status
+                or service.status.lower() in {"active", "published", "approved"}
+            )
+        ]
+        services.sort(key=lambda s: (s.name or "").lower())
+        items: list[dict] = []
+        for service in services:
+            approved_phone = service.approved_phone()
+            address = ", ".join(
+                part
+                for part in (service.address, service.city, service.state, service.postal_code)
+                if part
+            ) or None
+            items.append(
+                {
+                    "name": service.name,
+                    "phone": approved_phone,
+                    "address": address,
+                    "description": service.description,
+                    "callable": bool(approved_phone),
+                }
+            )
+        return items
+
     def query(self, text: str, limit: int = 9) -> tuple[str | None, list[dict]]:
         if self._snapshot is None:
             return None, []

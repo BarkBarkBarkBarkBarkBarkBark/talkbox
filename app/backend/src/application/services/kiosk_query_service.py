@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 MAX_ITEMS = 9
 MAX_DESCRIPTION_CHARS = 140
+# Directory rows need a bit more text for scannable descriptions.
+DIRECTORY_DESCRIPTION_CHARS = 220
 
 # 211 is the always-available human fallback for social services.
 RESOURCE_211 = {
@@ -70,13 +72,13 @@ _MOCK_KEYWORDS: list[tuple[str, str]] = [
 ]
 
 
-def _truncate(text: str | None) -> str | None:
+def _truncate(text: str | None, max_chars: int = MAX_DESCRIPTION_CHARS) -> str | None:
     if not text:
         return None
     text = " ".join(text.split())
-    if len(text) <= MAX_DESCRIPTION_CHARS:
+    if len(text) <= max_chars:
         return text
-    return text[: MAX_DESCRIPTION_CHARS - 1].rstrip() + "…"
+    return text[: max_chars - 1].rstrip() + "…"
 
 
 def _format_phone(raw: str | None) -> str | None:
@@ -149,10 +151,43 @@ class KioskQueryService:
         try:
             result = self._run_structured_query(text)
         except Exception:
-            logger.exception("kiosk query failed; falling back to mock catalog")
+            logger.exception("kiosk real pipeline failed; falling back to mock")
             return self._mock_query(text, search_mode="mock_fallback")
 
         return self._normalize(result)
+
+    def directory(self) -> dict:
+        """Flat A–Z organization list for the Browse tab (not category funnels)."""
+        raw = resource_sync_service.directory()
+        search_mode = "directory"
+        if not raw:
+            raw = self._mock_directory_raw()
+            if raw:
+                search_mode = "mock_directory"
+        items = self._number_items(
+            raw,
+            max_items=None,
+            max_description_chars=DIRECTORY_DESCRIPTION_CHARS,
+        )
+        if not items:
+            return self._empty_payload(
+                message="No organizations available.",
+                search_mode=search_mode,
+            )
+        return self._payload("All services", items, search_mode=search_mode)
+
+    @staticmethod
+    def _mock_directory_raw() -> list[dict]:
+        by_name: dict[str, dict] = {}
+        for entry in _MOCK_CATALOG.values():
+            for item in entry.get("items") or []:
+                name = (item.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower()
+                if key not in by_name:
+                    by_name[key] = dict(item)
+        return sorted(by_name.values(), key=lambda it: (it.get("name") or "").lower())
 
     def _run_structured_query(self, text: str) -> dict:
         """Deterministic kiosk pipeline: embedding similarity routes to a
@@ -230,9 +265,15 @@ class KioskQueryService:
 
     # ─── Shared shaping ──────────────────────────────────────────────────
     @staticmethod
-    def _number_items(raw_items: list[dict]) -> list[dict]:
+    def _number_items(
+        raw_items: list[dict],
+        *,
+        max_items: int | None = MAX_ITEMS,
+        max_description_chars: int = MAX_DESCRIPTION_CHARS,
+    ) -> list[dict]:
         items: list[dict] = []
-        for idx, it in enumerate(raw_items[:MAX_ITEMS], start=1):
+        source = raw_items if max_items is None else raw_items[:max_items]
+        for idx, it in enumerate(source, start=1):
             phone = it.get("phone")
             normalized_phone = re.sub(r"\D", "", str(phone)) if phone else None
             items.append(
@@ -242,7 +283,9 @@ class KioskQueryService:
                     "phone": normalized_phone,
                     "phone_display": _format_phone(phone),
                     "address": it.get("address"),
-                    "description": _truncate(it.get("description")),
+                    "description": _truncate(
+                        it.get("description"), max_description_chars
+                    ),
                     # The backend call endpoint still enforces the allowlist; this
                     # only tells clients the resource has a dialable number.
                     "callable": bool(it.get("callable", bool(normalized_phone))),
