@@ -1,19 +1,20 @@
 # Talk Box Kiosk
 
 Keypad-first, voice-assisted kiosk UX for the Talk Box resource-routing app,
-designed for a 6-inch screen driven by an ATM-style 12-key keypad. This is an
-**the primary production surface**: `/` renders the kiosk, `/kiosk` is a
-backward-compatible alias, `/demo` is the simulated kiosk, and `/chat` is the
-secondary admin/partner console.
+designed for a 6-inch screen driven by an ATM-style 12-key keypad. This is the
+**primary appliance surface**. Marketing lives on public web hosts; hardware
+always loads `/kiosk`.
 
 ## What's implemented (this milestone set: M0–M3, M8)
 
-- **`/`** — canonical production kiosk surface. Full-screen, no login wall, no
+- **`/` (localhost)** — production kiosk surface. Full-screen, no login wall, no
   desktop header. Driven entirely by number keys (`1`–`9`, `0`, `*`, `#`).
-- **`/kiosk`** — alias to the same production kiosk surface, kept for older
-  Pi setup scripts, bookmarks, and docs.
-- **`/demo`** — same UX plus an on-screen simulated keypad and a DEMO badge, for
-  showing partners from any browser. Calling is always simulated here.
+- **`/` (public host / Vercel)** — marketing About page (not the appliance).
+- **`/kiosk`** — hardware-stable production kiosk (Pi Chromium default).
+- **`/demo`** — same UX plus an on-screen simulated keypad, DEMO badge, and a thin
+  marketing chrome strip. Calling is always simulated here.
+- **`/donate`**, **`/site`** — public donation page and always-on marketing
+  preview (for local review when `/` is the kiosk).
 - **Chat-first home** — the main surface is an open-ended "What do you need?"
   input (original Talk Box style). Single turn: ask → numbered results → press a
   number → call. A **Browse services** tab lists the numbered category menu,
@@ -71,9 +72,10 @@ docker compose up --build
 
 Then open:
 
-- Kiosk canonical: <http://localhost:8084/>
-- Kiosk alias: <http://localhost:8084/kiosk>
+- Production kiosk: <http://localhost:8084/kiosk> (also `/` on localhost)
+- Marketing preview: <http://localhost:8084/site>
 - Demo: <http://localhost:8084/demo>
+- Donate: <http://localhost:8084/donate>
 - Admin chat console: <http://localhost:8084/chat>
 - API health: <http://127.0.0.1:8085/api/health>
 

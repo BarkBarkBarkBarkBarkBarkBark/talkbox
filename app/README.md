@@ -7,10 +7,10 @@ relevant rows from the agencies/Healthscout datasets, and returns a structured
 card grid to the caller (with a markdown fallback for SMS and other flat-text
 clients).
 
-**Entrypoint rule:** the production TalkBox kiosk is the main app. `/` is the
-canonical public route and `/kiosk` is an alias to the same kiosk surface.
-`/chat` is a secondary admin/partner console. Pointer/Health Scout remain
-supporting routing/data assets, not the primary user-facing product.
+**Entrypoint rule:** appliances keep the production kiosk at `/kiosk` (and at
+`/` on localhost). Public web hosts (Vercel) serve marketing at `/` with `/demo`
+and `/donate`. `/chat` remains a secondary admin/partner console.
+Pointer/Health Scout remain supporting routing/data assets, not the appliance UX.
 
 ---
 
@@ -274,7 +274,7 @@ local backend or a remote staging deployment.
 | HTTP       | `CORS_ORIGINS`                                                                             |
 | Auth       | `JWT_SECRET`, `COOKIE_SECURE`, `FRONTEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, `ADMIN_COMPANY` |
 | Twilio     | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`                            |
-| Frontend   | `VITE_API_URL`, `VITE_APP_NAME`                                                            |
+| Frontend   | `VITE_API_URL`, `VITE_APP_NAME`, `VITE_DONATE_URL`, `VITE_DONATE_LABEL`                  |
 | Docker     | `IMAGE_BACKEND`, `IMAGE_FRONTEND` (overridden by CI)                                        |
 
 ---
@@ -290,6 +290,8 @@ Matrix over `backend` + `frontend`:
 - Builds with **Buildx** + GHA cache (`cache-from type=gha,scope=<svc>`).
 - Tags each image with `{branch}`, `sha-short`, and `latest` on the default branch.
 - Frontend receives `VITE_API_URL` / `VITE_APP_NAME` as build-args from GitHub
+  Actions vars. Set `VITE_DONATE_URL` (and optional `VITE_DONATE_LABEL`) on the
+  Vercel project so the public `/donate` CTA points at your fundraiser.
   Actions vars; the backend bakes `alembic/`, the query-category JSONs,
   `agencies_master.csv`, and `database/sacramento.db` into the image so the
   seed step and Healthscout lookups are self-sufficient.

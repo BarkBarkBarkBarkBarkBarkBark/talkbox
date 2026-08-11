@@ -16,7 +16,9 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info() { echo -e "${GREEN}[kiosk]${NC} $*"; }
 warn() { echo -e "${YELLOW}[kiosk]${NC} $*"; }
 
-KIOSK_URL="${KIOSK_URL:-http://localhost:8084/}"
+# Hardware-stable production surface. Do not point Chromium at public `/`
+# (that path is marketing on non-local hosts / Vercel).
+KIOSK_URL="${KIOSK_URL:-http://localhost:8084/kiosk}"
 KIOSK_USER="${SUDO_USER:-${USER}}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
