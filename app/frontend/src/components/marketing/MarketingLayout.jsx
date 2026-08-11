@@ -19,7 +19,7 @@ export default function MarketingLayout({ children }) {
       <header className="marketing-header sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-5 sm:px-8">
           <NavLink to={aboutTo} className="group flex items-baseline gap-2 no-underline">
-            <TalkBoxLogo compact className="group-hover:text-primary" />
+            <TalkBoxLogo compact className="text-white group-hover:text-primary" />
           </NavLink>
           <nav className="flex items-center gap-5 sm:gap-8" aria-label="Marketing">
             <NavLink to={aboutTo} end className={navLinkClass}>

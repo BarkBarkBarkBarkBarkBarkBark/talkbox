@@ -221,18 +221,11 @@ body {
 }
 
 .talkbox-logo__mark {
-  display: inline-grid;
-  place-items: center;
-  width: 0.72em;
-  height: 0.72em;
-  color: hsl(50 90% 66%);
-  transform: rotate(-7deg) translateY(-0.04em);
-}
-
-.talkbox-logo__mark svg {
-  width: 0.67em;
-  height: 0.67em;
-  filter: drop-shadow(0.035em 0.045em 0 hsl(0 0% 0% / 0.28));
+  display: inline-block;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  font-size: 0.58em;
+  line-height: 1;
+  transform: translateY(-0.08em);
 }
 
 .talkbox-logo--compact {
@@ -243,7 +236,18 @@ body {
 }
 
 .talkbox-logo--hero {
-  color: hsl(50 90% 66%);
+  gap: 0.17em;
+  color: transparent;
+  font-size: clamp(2.4rem, 6vw, 4.75rem);
+  white-space: nowrap;
+}
+
+.talkbox-logo--hero .talkbox-logo__word {
+  -webkit-text-stroke: 0.025em hsl(0 0% 100%);
+  paint-order: stroke fill;
+  text-shadow:
+    0.04em 0.05em 0 hsl(0 0% 0% / 0.36),
+    0 0 0.06em hsl(0 0% 100% / 0.38);
 }
 
 .marketing-hero {
