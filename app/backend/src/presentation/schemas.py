@@ -65,6 +65,7 @@ class AdminAgencyWrite(BaseModel):
     description: str | None = None
     insurance: str | None = Field(default=None, max_length=255)
     knowledge_tags: str | None = None
+    show_on_kiosk: bool = True
 
 
 class AdminAgencyRead(AdminAgencyWrite):
@@ -74,6 +75,7 @@ class AdminAgencyRead(AdminAgencyWrite):
 class AdminAgencyPage(BaseModel):
     items: list[AdminAgencyRead]
     total: int
+    visible_total: int
     page: int
     page_size: int
 

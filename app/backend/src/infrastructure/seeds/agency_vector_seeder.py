@@ -1,4 +1,4 @@
-"""Build a fresh, versioned pgvector collection from canonical FSC resources."""
+"""Legacy FSC vector seeder retained for rollback; do not use in production."""
 
 from __future__ import annotations
 

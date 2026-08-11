@@ -31,6 +31,7 @@ fly secrets import -a "$FLY_APP" < "$ENV_FILE"
 echo "Uploading Vercel secrets..."
 while IFS='=' read -r key value; do
     [[ -z "$key" || "$key" =~ ^# ]] && continue
+    [[ "$key" == VITE_* ]] || continue
 
     vercel env rm "$key" "$VERCEL_ENV" -y >/dev/null 2>&1 || true
     printf "%s" "$value" | vercel env add "$key" "$VERCEL_ENV"

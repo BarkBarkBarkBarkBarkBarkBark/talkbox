@@ -1,4 +1,4 @@
-"""Near-text retrieval for canonical FSC resources stored in pgvector."""
+"""Legacy FSC snapshot vector lookup retained for rollback only."""
 
 from __future__ import annotations
 

@@ -14,46 +14,36 @@ known service agencies, the 211 help lines, and configured test numbers.
 
 ## Canonical resource architecture
 
-The FSC Resource Platform is the source of truth for community organizations,
-services, approved contacts, announcements, and kiosk content. FSC staff manage
-those records in the Replit-hosted Staff CMS backed by production Neon
-PostgreSQL. TalkBox does not integrate with that database schema directly:
+The existing standalone Neon project named `talkbox` is the source of truth for
+community organizations, categories, users, and pgvector collections. Only the
+FastAPI backend receives its server-side `DB_URI`:
 
 ```text
-FSC Staff CMS -> Replit Neon -> authenticated /api/v1/talkbox/*
-              -> TalkBox FastAPI on Fly.io -> TalkBox kiosks
+TalkBox Neon -> TalkBox FastAPI on Fly.io -> Vercel website and TalkBox kiosks
 ```
 
-FastAPI checks the upstream `content_version` every 60 seconds by default and
-downloads a complete typed snapshot only when it changes. A snapshot is
-installed atomically after validation; a timeout, unauthorized response, or
-malformed update leaves the last-known-good data untouched. `/healthz` remains
-healthy during an FSC outage, while `/api/kiosk/sync-status` reports cache and
-sync state.
+Kiosk search uses the `query_categories` pgvector collection to choose a
+category and then reads matching agencies from Neon. Browse reads the same
+`agencies` table directly. The former FSC snapshot synchronization remains
+disabled rollback code and is not a runtime authority.
 
 The source currently supports multiple frontend/backend topologies. A local
 client appliance serves React through nginx and proxies `/api/*` to its own
 backend container. The Vercel frontend rewrites `/api/*` to Fly, while CI-built
 frontend images may bake another backend into `VITE_API_URL`. Keep these roles
-separate when configuring credentials: only Fly receives the FSC service key;
-client appliances receive a distinct read-only snapshot key.
+separate when configuring credentials: Fly receives backend secrets; Vercel
+receives public `VITE_*` build configuration only. Kiosks call FastAPI and never
+receive Neon credentials.
 
-Validated snapshots persist at `/data/resource-snapshot.sqlite3`. Configure a
-Docker-based client appliance, whether Raspberry Pi, Linux, or macOS, with:
-
-```bash
-./scripts/configure-client-snapshot.sh https://talkbox.fly.dev
-```
-
-The helper requires `python3`, updates ignored `app/.env` without printing the
-key, recreates only the backend, and reports non-secret synchronization status.
-For a local virtual environment, use `python3 -m venv .venv`.
-
-Synchronization is strictly limited to public resource and kiosk configuration
-data. Client, participant, user, submission, authentication, case, audit, and
-interaction-event records are excluded. Kiosk calling remains server-controlled:
-only active contacts explicitly marked `allow_talkbox_call=true` are callable.
+Normal startup does not migrate, seed, import, truncate, or create an admin.
+Those operations require explicit operator commands. Mock kiosk resources are
+available only when `KIOSK_MOCK_QUERY=true`.
 See [`docs/adr/0001-fsc-resource-platform-source-of-truth.md`](docs/adr/0001-fsc-resource-platform-source-of-truth.md).
+
+Authenticated superusers manage canonical resources at `/admin`. The
+`show_on_kiosk` setting controls Browse visibility only; hidden resources remain
+eligible for voice search. Planned Neon-to-community-kiosk propagation is
+documented in [`docs/LOCAL_FIRST_KIOSK_SYNC.md`](docs/LOCAL_FIRST_KIOSK_SYNC.md).
 
 **Entrypoint rule:** TalkBox is kiosk-first on appliances and marketing-first on
 the public web. On **localhost**, `/` is the production kiosk; on **public hosts**
@@ -277,23 +267,15 @@ cd app/frontend
 npm install && npm run dev    # Vite proxies /api to 127.0.0.1:8085
 ```
 
-## Resource synchronization configuration
+## Canonical database configuration
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `FSC_RESOURCE_API_BASE_URL` | Published HTTPS FSC Resource Platform origin | required |
-| `FSC_RESOURCE_API_KEY` | Backend-only bearer credential | required secret |
-| `FSC_RESOURCE_SYNC_ENABLED` | Enables startup and periodic synchronization | `true` |
-| `FSC_RESOURCE_SYNC_INTERVAL_SECONDS` | Version polling interval | `60` |
-| `FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS` | Upstream request timeout | `10` |
-| `FSC_RESOURCE_CACHE_MAX_AGE_SECONDS` | Stale-warning threshold | `86400` |
+- `DB_URI`: server-side TalkBox Neon connection; required by FastAPI.
+- `FSC_RESOURCE_SYNC_ENABLED=false`: keeps the abandoned upstream integration
+  dormant.
+- `KIOSK_MOCK_QUERY=false`: prevents sample resources in production.
+- `TALKBOX_SEED_ADMIN=false`: keeps startup read-only.
 
-On Fly, set `FSC_RESOURCE_API_BASE_URL` to the real published HTTPS origin and
-store `FSC_RESOURCE_API_KEY` with `fly secrets set`; never put the key in
-`fly.toml` or on a Raspberry Pi. Troubleshoot with `/api/kiosk/sync-status` and
-backend events `resource_sync_updated`, `resource_sync_unchanged`,
-`resource_sync_failed`, and `upstream_auth_failed`. The cache is currently
-in-memory on Fly and is repopulated automatically after process startup.
+Never add `DB_URI`, OpenAI, Twilio, JWT, or admin secrets to Vercel.
 
 ## Known sharp edges
 

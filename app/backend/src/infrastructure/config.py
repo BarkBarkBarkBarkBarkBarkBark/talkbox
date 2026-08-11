@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     agency_collection_name: str = Field(
         default="agency_catalog_v1", alias="AGENCY_COLLECTION_NAME"
     )
-    resource_search_mode: str = Field(default="vector", alias="RESOURCE_SEARCH_MODE")
+    resource_search_mode: str = Field(
+        default="category_vector_sql", alias="RESOURCE_SEARCH_MODE"
+    )
 
     # ─── Persistence ──────────────────────────────────────────────────
     db_uri: str = Field(default="", alias="DB_URI")
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("FSC_RESOURCE_API_KEY", "FLY_RESOURCE_API_KEY"),
     )
-    fsc_resource_sync_enabled: bool = Field(default=True, alias="FSC_RESOURCE_SYNC_ENABLED")
+    fsc_resource_sync_enabled: bool = Field(default=False, alias="FSC_RESOURCE_SYNC_ENABLED")
     fsc_resource_sync_interval_seconds: int = Field(
         default=60, alias="FSC_RESOURCE_SYNC_INTERVAL_SECONDS"
     )
@@ -106,6 +108,7 @@ class Settings(BaseSettings):
     admin_password: str = Field(default="changeme", alias="ADMIN_PASSWORD")
     admin_name: str = Field(default="Admin", alias="ADMIN_NAME")
     admin_company: str = Field(default="", alias="ADMIN_COMPANY")
+    talkbox_seed_admin: bool = Field(default=False, alias="TALKBOX_SEED_ADMIN")
 
     # ─── Kiosk ────────────────────────────────────────────────────────
     # When true, the /api/kiosk/query endpoint returns curated sample

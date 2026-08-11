@@ -31,6 +31,7 @@ echo "Pushing secrets to Vercel: $VERCEL_ENV"
 while IFS='=' read -r key value; do
   [[ -z "${key}" || "${key}" =~ ^# ]] && continue
   key="$(echo "$key" | xargs)"
+  [[ "$key" == VITE_* ]] || continue
   value="${value%$'\r'}"
   value="${value%\"}"
   value="${value#\"}"

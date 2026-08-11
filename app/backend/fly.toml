@@ -1,12 +1,13 @@
-# fly.toml — Talk Box backend
+# fly.toml — TalkBox backend
 # Deploy from the app root so the Docker build can include database/sacramento.db:
 #   cd app && fly deploy -c backend/fly.toml
 #
-# First-time setup:
-#   1. fly postgres create --name talkbox-db --region lax
-#   2. fly postgres attach talkbox-db          # sets DATABASE_URL secret automatically
-#   3. fly secrets set \
-#        DB_URI="<postgres connection string from step 2, postgresql+psycopg://...>" \
+# Canonical database setup:
+#   1. Create no Fly Postgres database. Use the existing TalkBox Neon project.
+#   2. Set DB_URI to its server-side connection string; the app does not read DATABASE_URL.
+#   3. Set or preserve the remaining backend-only secrets:
+#      fly secrets set \
+#        DB_URI="<TalkBox Neon connection string, postgresql+psycopg://...>" \
 #        OPENAI_API_KEY="sk-..." \
 #        JWT_SECRET="$(openssl rand -hex 32)" \
 #        ADMIN_EMAIL="admin@example.com" \
@@ -37,14 +38,15 @@ primary_region = 'lax'
   EMBEDDINGS_MODEL = 'text-embedding-3-small'
   COLLECTION_NAME = 'query_categories'
   AGENCY_COLLECTION_NAME = 'agency_catalog_v1'
-  RESOURCE_SEARCH_MODE = 'vector'
+  RESOURCE_SEARCH_MODE = 'category_vector_sql'
   DB_NAME = 'sacramento'
   DB_TABLE_NAME = 'sacramento'
   CORS_ORIGINS = '*'
   KIOSK_MOCK_QUERY = 'false'
+  TALKBOX_SEED_ADMIN = 'false'
   KIOSK_CALLING_ENABLED = 'true'
   KIOSK_IDLE_RESET_SECONDS = '60'
-  FSC_RESOURCE_SYNC_ENABLED = 'true'
+  FSC_RESOURCE_SYNC_ENABLED = 'false'
   FSC_RESOURCE_SYNC_INTERVAL_SECONDS = '60'
   FSC_RESOURCE_REQUEST_TIMEOUT_SECONDS = '10'
   FSC_RESOURCE_CACHE_MAX_AGE_SECONDS = '86400'

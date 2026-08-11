@@ -11,7 +11,7 @@ from src.presentation.middleware import configure_cors
 from src.presentation.query_routes import router as query_router
 from src.presentation.resource_routes import router as resource_router
 from src.presentation.sms_routes import router as sms_router
-from src.presentation.schemas_user import UserCreate, UserRead, UserUpdate
+from src.presentation.schemas_user import UserRead, UserUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +19,24 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from src.application.services.resource_sync_service import resource_sync_service
+    from src.infrastructure.config import settings
 
-    try:
-        from src.infrastructure.seed_admin import seed_admin
+    if settings.talkbox_seed_admin:
+        try:
+            from src.infrastructure.seed_admin import seed_admin
 
-        await seed_admin()
-    except Exception:
-        logger.exception("admin seed failed at startup")
-    try:
-        await resource_sync_service.start()
-    except Exception:
-        logger.exception("resource synchronization failed at startup")
+            await seed_admin()
+        except Exception:
+            logger.exception("admin seed failed at startup")
+    else:
+        logger.info("admin seed disabled")
+    if settings.fsc_resource_sync_enabled:
+        try:
+            await resource_sync_service.start()
+        except Exception:
+            logger.exception("resource synchronization failed at startup")
+    else:
+        logger.info("FSC resource synchronization disabled")
     try:
         yield
     finally:
@@ -53,11 +60,6 @@ def create_core_app() -> FastAPI:
     app.include_router(
         fastapi_users.get_auth_router(auth_backend),
         prefix="/api/auth/jwt",
-        tags=["auth"],
-    )
-    app.include_router(
-        fastapi_users.get_register_router(UserRead, UserCreate),
-        prefix="/api/auth",
         tags=["auth"],
     )
     app.include_router(

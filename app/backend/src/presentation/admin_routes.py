@@ -36,6 +36,7 @@ CANONICAL_COLUMNS = (
     "description",
     "insurance",
     "knowledge_tags",
+    "show_on_kiosk",
 )
 HEADER_ALIASES = {
     "agency": "agency",
@@ -56,6 +57,9 @@ HEADER_ALIASES = {
     "insurance": "insurance",
     "knowledge_tags": "knowledge_tags",
     "tags": "knowledge_tags",
+    "show_on_kiosk": "show_on_kiosk",
+    "show_in_browse": "show_on_kiosk",
+    "visible": "show_on_kiosk",
 }
 
 
@@ -73,7 +77,17 @@ def _clean(value: object | None) -> str | None:
 
 
 def _agency_from_values(values: dict[str, object]) -> tuple[dict | None, list[str]]:
-    row = {column: _clean(values.get(column)) for column in CANONICAL_COLUMNS}
+    row = {
+        column: _clean(values.get(column))
+        for column in CANONICAL_COLUMNS
+        if column != "show_on_kiosk"
+    }
+    raw_visibility = _clean(values.get("show_on_kiosk"))
+    row["show_on_kiosk"] = (
+        True
+        if raw_visibility is None
+        else raw_visibility.lower() not in {"0", "false", "no", "off", "hidden"}
+    )
     errors = [] if row["agency"] else ["Agency name is required."]
     return (row if not errors else None, errors)
 
@@ -140,25 +154,29 @@ def _write_agency(cur, payload: AdminAgencyWrite, agency_id: int | None = None) 
         payload.description,
         payload.insurance,
         payload.knowledge_tags,
+        payload.show_on_kiosk,
     )
     if agency_id is None:
         cur.execute(
-            """INSERT INTO agencies (agency_name, phone_number, address, category_id, description, insurance, knowledge_tags)
-               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            """INSERT INTO agencies
+                   (agency_name, phone_number, address, category_id, description,
+                    insurance, knowledge_tags, show_on_kiosk)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             values,
         )
         agency_id = cur.fetchone()["id"]
     else:
         cur.execute(
             """UPDATE agencies SET agency_name = %s, phone_number = %s, address = %s, category_id = %s,
-               description = %s, insurance = %s, knowledge_tags = %s WHERE id = %s RETURNING id""",
+               description = %s, insurance = %s, knowledge_tags = %s, show_on_kiosk = %s
+               WHERE id = %s RETURNING id""",
             (*values, agency_id),
         )
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Resource not found.")
     cur.execute(
         """SELECT a.id, a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                  a.description, a.insurance, a.knowledge_tags
+                  a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
            FROM agencies a LEFT JOIN categories c ON c.id = a.category_id WHERE a.id = %s""",
         (agency_id,),
     )
@@ -182,17 +200,28 @@ def list_agencies(
         values.append(category)
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with _connection() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT count(*) AS total FROM agencies a LEFT JOIN categories c ON c.id = a.category_id {where}", values)
-        total = cur.fetchone()["total"]
+        cur.execute(
+            f"""SELECT count(*) AS total,
+                       count(*) FILTER (WHERE a.show_on_kiosk) AS visible_total
+                FROM agencies a LEFT JOIN categories c ON c.id = a.category_id {where}""",
+            values,
+        )
+        counts = cur.fetchone()
         cur.execute(
             f"""SELECT a.id, a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                       a.description, a.insurance, a.knowledge_tags
+                       a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
                 FROM agencies a LEFT JOIN categories c ON c.id = a.category_id {where}
                 ORDER BY a.agency_name, a.id LIMIT %s OFFSET %s""",
             (*values, page_size, (page - 1) * page_size),
         )
         items = cur.fetchall()
-    return AdminAgencyPage(items=items, total=total, page=page, page_size=page_size)
+    return AdminAgencyPage(
+        items=items,
+        total=counts["total"],
+        visible_total=counts["visible_total"],
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/categories", response_model=list[AdminCategoryRead])
@@ -232,7 +261,7 @@ def delete_agency(agency_id: int, _: User = Depends(current_superuser)) -> None:
 def export_agencies(_: User = Depends(current_superuser)) -> StreamingResponse:
     with _connection() as conn, conn.cursor() as cur:
         cur.execute("""SELECT a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                              a.description, a.insurance, a.knowledge_tags
+                              a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
                        FROM agencies a LEFT JOIN categories c ON c.id = a.category_id ORDER BY a.agency_name""")
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=CANONICAL_COLUMNS)

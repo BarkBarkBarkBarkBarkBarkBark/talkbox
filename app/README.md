@@ -197,16 +197,15 @@ python main.py seed-agencies --confirm-replace
 python main.py seed-agencies --confirm-replace --csv /path/to/alt.csv
 ```
 
-`seed-agency-vectors` downloads the authenticated FSC TalkBox bootstrap,
-embeds each published and visible resource, and writes its canonical
-`resource_id` into vector metadata. It requires `DB_URI`,
-`FSC_RESOURCE_API_BASE_URL`, `FSC_RESOURCE_API_KEY`, and the configured
-embeddings-provider credentials. Seed a fresh `AGENCY_COLLECTION_NAME`, verify
-it, then deploy that collection name with `RESOURCE_SEARCH_MODE=vector`.
+`query_categories` is the active vector collection: it routes each request to a
+category, then SQL retrieves agencies from canonical TalkBox Neon. The legacy
+`seed-agency-vectors` command still depends on the disabled FSC integration and
+must not be run in production. Before direct resource search is enabled, change
+that seeder to read Neon agencies and build a fresh versioned collection.
 
-Kiosk query responses include `search_mode`. A value of `vector` confirms
-near-text retrieval; `lexical_fallback` means the collection was unavailable,
-empty, stale, or did not map to the current FSC snapshot.
+Kiosk query responses use `search_mode=category_vector_sql` for the canonical
+pipeline and `database_directory` for Browse. Mock results appear only when
+`KIOSK_MOCK_QUERY=true`.
 
 Inside a running container:
 
@@ -230,8 +229,8 @@ docker compose up --build
 
 - Frontend → <http://localhost:8084>
 - API health (via nginx) → <http://localhost:8084/api/health>
-- Log in with `ADMIN_EMAIL` + `ADMIN_PASSWORD` from `.env` (lifespan seeds it
-  on first boot).
+- Existing administrators can log in with their stored credentials. Automatic
+  admin creation is disabled unless `TALKBOX_SEED_ADMIN=true`.
 
 ### Backend only
 
@@ -272,7 +271,7 @@ local backend or a remote staging deployment.
 | Database   | `DB_URI`, `DB_NAME`, `DB_TABLE_NAME`                                                        |
 | Logging    | `LOG_FILE`, `LOG_LEVEL`                                                                    |
 | HTTP       | `CORS_ORIGINS`                                                                             |
-| Auth       | `JWT_SECRET`, `COOKIE_SECURE`, `FRONTEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, `ADMIN_COMPANY` |
+| Auth       | `JWT_SECRET`, `COOKIE_SECURE`, `FRONTEND_URL`, `TALKBOX_SEED_ADMIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, `ADMIN_COMPANY` |
 | Twilio     | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`                            |
 | Frontend   | `VITE_API_URL`, `VITE_APP_NAME`, `VITE_DONATE_URL`, `VITE_DONATE_LABEL`                  |
 | Docker     | `IMAGE_BACKEND`, `IMAGE_FRONTEND` (overridden by CI)                                        |

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, FileUp, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api.js";
 import { Button } from "../components/ui/Button.jsx";
@@ -12,6 +12,7 @@ const EMPTY_AGENCY = {
   description: "",
   insurance: "",
   knowledge_tags: "",
+  show_on_kiosk: true,
 };
 
 function errorMessage(error) {
@@ -52,6 +53,18 @@ function AgencyForm({ agency, onCancel, onSave, saving }) {
       </label>
       <label className="grid gap-1 text-base font-semibold sm:col-span-2">Tags
         <input name="knowledge_tags" value={values.knowledge_tags || ""} onChange={update} className="h-10 rounded-md border border-input bg-background px-3 font-normal" />
+      </label>
+      <label className="flex items-center gap-3 rounded-md border border-input bg-background p-3 text-base font-semibold sm:col-span-2">
+        <input
+          type="checkbox"
+          name="show_on_kiosk"
+          checked={values.show_on_kiosk !== false}
+          onChange={(event) => setValues((current) => ({ ...current, show_on_kiosk: event.target.checked }))}
+          className="h-5 w-5 accent-primary"
+        />
+        <span>Show in kiosk Browse directory
+          <span className="block font-normal text-muted-foreground">Hidden resources remain available to voice search.</span>
+        </span>
       </label>
       <div className="flex justify-end gap-2 sm:col-span-2">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
@@ -99,7 +112,7 @@ function LoginGate({ onLoggedIn }) {
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(null);
-  const [resources, setResources] = useState({ items: [], total: 0, page: 1, page_size: 25 });
+  const [resources, setResources] = useState({ items: [], total: 0, visible_total: 0, page: 1, page_size: 25 });
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -164,6 +177,41 @@ export default function AdminPage() {
     }
   }
 
+  async function toggleVisibility(agency) {
+    try {
+      await api.admin.updateAgency(agency.id, {
+        ...agency,
+        show_on_kiosk: agency.show_on_kiosk === false,
+      });
+      await loadResources();
+      toast.success(agency.show_on_kiosk === false ? "Resource shown in Browse." : "Resource hidden from Browse.");
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }
+
+  async function downloadExport() {
+    try {
+      const blob = await api.admin.exportAgencies();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "agencies_master.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }
+
+  async function logout() {
+    try {
+      await api.admin.logout();
+    } finally {
+      setAuthenticated(false);
+    }
+  }
+
   async function importFile(event) {
     const [file] = event.target.files;
     if (!file) return;
@@ -205,15 +253,18 @@ export default function AdminPage() {
           <div>
             <p className="text-base font-bold uppercase text-primary">TalkBox operations</p>
             <h1 className="mt-1 text-2xl font-bold">Resource manager</h1>
-            <p className="mt-1 text-base text-muted-foreground">{resources.total} live resources available to TalkBox.</p>
+            <p className="mt-1 text-base text-muted-foreground">
+              {resources.visible_total} shown in Browse · {resources.total} available to voice search
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={api.admin.exportUrl()}><Button variant="outline"><Download className="mr-2 h-4 w-4" />Export CSV</Button></a>
+            <Button variant="outline" onClick={downloadExport}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
             <label className="inline-flex h-10 cursor-pointer items-center rounded-md bg-primary px-4 text-base font-semibold text-primary-foreground hover:bg-primary/90">
               <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Preview import"}
               <input className="sr-only" type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={uploading} />
             </label>
             <Button onClick={() => setEditing(EMPTY_AGENCY)}><Plus className="mr-2 h-4 w-4" />Add resource</Button>
+            <Button variant="outline" onClick={logout}><LogOut className="mr-2 h-4 w-4" />Sign out</Button>
           </div>
         </header>
 
@@ -250,10 +301,12 @@ export default function AdminPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-220 text-left text-base">
               <thead className="border-b border-border bg-secondary/50 text-muted-foreground"><tr>
-                <th className="px-4 py-3 font-semibold">Organization</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Phone</th><th className="px-4 py-3 font-semibold">Address</th><th className="w-24 px-4 py-3"><span className="sr-only">Actions</span></th>
+                <th className="px-4 py-3 font-semibold">Organization</th><th className="px-4 py-3 font-semibold">Browse</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Phone</th><th className="px-4 py-3 font-semibold">Address</th><th className="w-32 px-4 py-3"><span className="sr-only">Actions</span></th>
               </tr></thead>
               <tbody>{resources.items.map((agency) => <tr key={agency.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 font-semibold">{agency.agency}<p className="mt-1 font-normal text-muted-foreground">{agency.description}</p></td><td className="px-4 py-3">{agency.category || "Uncategorized"}</td><td className="px-4 py-3">{agency.phone_number || "-"}</td><td className="px-4 py-3">{agency.address || "-"}</td>
+                <td className="px-4 py-3 font-semibold">{agency.agency}<p className="mt-1 font-normal text-muted-foreground">{agency.description}</p></td>
+                <td className="px-4 py-3"><Button size="icon" variant="ghost" title={agency.show_on_kiosk === false ? "Show in kiosk Browse" : "Hide from kiosk Browse"} aria-label={agency.show_on_kiosk === false ? "Show in kiosk Browse" : "Hide from kiosk Browse"} onClick={() => toggleVisibility(agency)}>{agency.show_on_kiosk === false ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-primary" />}</Button></td>
+                <td className="px-4 py-3">{agency.category || "Uncategorized"}</td><td className="px-4 py-3">{agency.phone_number || "-"}</td><td className="px-4 py-3">{agency.address || "-"}</td>
                 <td className="px-4 py-3"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit resource" aria-label="Edit resource" onClick={() => setEditing(agency)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete resource" aria-label="Delete resource" onClick={() => removeAgency(agency)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></td>
               </tr>)}</tbody>
             </table>

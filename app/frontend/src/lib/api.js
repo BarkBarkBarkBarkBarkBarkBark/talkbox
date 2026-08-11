@@ -39,6 +39,7 @@ export const api = {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ username: email, password }),
     }),
+    logout: () => request("/api/auth/jwt/logout", { method: "POST" }),
     agencies: ({ search = "", category = "", page = 1 } = {}) => {
       const params = new URLSearchParams({ page: String(page) });
       if (search) params.set("search", search);
@@ -65,7 +66,13 @@ export const api = {
     importRows: (id) => request(`/api/admin/imports/${id}`),
     publishImport: (id) => request(`/api/admin/imports/${id}/publish`, { method: "POST" }),
     discardImport: (id) => request(`/api/admin/imports/${id}/discard`, { method: "POST" }),
-    exportUrl: () => `${BASE_URL}/api/admin/agencies/export`,
+    exportAgencies: async () => {
+      const response = await fetch(`${BASE_URL}/api/admin/agencies/export`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`);
+      return response.blob();
+    },
   },
 };
 

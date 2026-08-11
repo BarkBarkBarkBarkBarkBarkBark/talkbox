@@ -17,6 +17,16 @@ from src.infrastructure.talkbox_snapshot_client import ClientSnapshotClient
 from src.presentation.resource_routes import _authorize_snapshot
 
 
+def test_destructive_startup_actions_are_disabled_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("TALKBOX_SEED_ADMIN", raising=False)
+    monkeypatch.delenv("FSC_RESOURCE_SYNC_ENABLED", raising=False)
+
+    isolated = Settings(_env_file=None)
+
+    assert isolated.talkbox_seed_admin is False
+    assert isolated.fsc_resource_sync_enabled is False
+
+
 def test_existing_fly_resource_api_key_is_supported(monkeypatch) -> None:
     monkeypatch.delenv("FSC_RESOURCE_API_KEY", raising=False)
     monkeypatch.setenv("FLY_RESOURCE_API_KEY", "existing-fly-key")

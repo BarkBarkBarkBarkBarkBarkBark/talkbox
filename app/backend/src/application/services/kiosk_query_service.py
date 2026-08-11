@@ -19,11 +19,8 @@ from pathlib import Path
 from collections.abc import Callable
 
 from src.application.services.query_handler import QueryHandler
-from src.application.services.resource_sync_service import resource_sync_service
+from src.infrastructure.agency_repository import AgencyRepository
 from src.infrastructure.config import settings
-from src.infrastructure.vector_store.pgvector_resource_retriever import (
-    PGVectorResourceRetriever,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -98,10 +95,10 @@ class KioskQueryService:
     def __init__(
         self,
         query_handler: QueryHandler | Callable[[], QueryHandler],
-        resource_retriever: PGVectorResourceRetriever | None = None,
+        agency_repository: AgencyRepository | None = None,
     ):
         self._handler_provider = query_handler
-        self._resource_retriever = resource_retriever or PGVectorResourceRetriever()
+        self._agency_repository = agency_repository or AgencyRepository()
 
     @property
     def _handler(self) -> QueryHandler:
@@ -117,53 +114,29 @@ class KioskQueryService:
         if settings.kiosk_mock_query:
             return self._mock_query(text, search_mode="mock")
 
-        if resource_sync_service.snapshot is not None:
-            if settings.resource_search_mode.lower() == "vector":
-                try:
-                    resource_ids = self._resource_retriever.retrieve_resource_ids(
-                        text, MAX_ITEMS
-                    )
-                    category, canonical_items = resource_sync_service.query_by_resource_ids(
-                        resource_ids, MAX_ITEMS
-                    )
-                    items = self._number_items(canonical_items)
-                    if items:
-                        return self._payload(category, items, search_mode="vector")
-                    logger.warning(
-                        "resource_vector_search_unmapped collection=%s matches=%d",
-                        settings.agency_collection_name,
-                        len(resource_ids),
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "resource_vector_search_failed collection=%s error_class=%s",
-                        settings.agency_collection_name,
-                        type(exc).__name__,
-                    )
-            category, canonical_items = resource_sync_service.query(text, MAX_ITEMS)
-            items = self._number_items(canonical_items)
-            return (
-                self._payload(category, items, search_mode="lexical_fallback")
-                if items
-                else self._empty_payload(search_mode="lexical_fallback")
-            )
-
         try:
             result = self._run_structured_query(text)
         except Exception:
-            logger.exception("kiosk real pipeline failed; falling back to mock")
-            return self._mock_query(text, search_mode="mock_fallback")
+            logger.exception("kiosk canonical database pipeline failed")
+            return self._empty_payload(search_mode="database_error")
 
         return self._normalize(result)
 
     def directory(self) -> dict:
         """Flat A–Z organization list for the Browse tab (not category funnels)."""
-        raw = resource_sync_service.directory()
-        search_mode = "directory"
-        if not raw:
+        if settings.kiosk_mock_query:
             raw = self._mock_directory_raw()
-            if raw:
-                search_mode = "mock_directory"
+            search_mode = "mock_directory"
+        else:
+            try:
+                raw = self._agency_repository.list_directory()
+                search_mode = "database_directory"
+            except Exception:
+                logger.exception("kiosk canonical database directory failed")
+                return self._empty_payload(
+                    message="The resource directory is temporarily unavailable.",
+                    search_mode="database_error",
+                )
         items = self._number_items(
             raw,
             max_items=None,

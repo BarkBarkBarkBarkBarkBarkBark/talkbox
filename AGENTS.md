@@ -19,16 +19,16 @@ When working on frontend routing, deployment, docs, or kiosk setup:
 
 Pointer and Health Scout are supporting routing/data assets inherited from earlier project language. Treat them as assets that serve TalkBox, not as the product identity, deployment target, or primary entrypoint.
 
-The FSC Resource Platform is the source of truth for TalkBox resource and
-directory data. Its Replit-hosted Neon database is maintained through the FSC
-Staff CMS, and TalkBox consumes public TalkBox data through the authenticated
-versioned API via the Fly FastAPI backend. Do not reintroduce hard-coded
-canonical resource lists or connect kiosks directly to Neon.
+The existing standalone Neon project named `talkbox` is the source of truth for
+TalkBox resources, directory data, users, and pgvector collections. FastAPI is
+the only application layer that connects to Neon; browsers and kiosks consume
+that data through the API and must never receive database credentials.
 
-Resource synchronization is public-data-only. Never synchronize users,
-participants, clients, submissions, authentication data, audit records, case
-data, or kiosk interaction events. Phone numbers are callable only when an
-active upstream contact explicitly has `allow_talkbox_call=true`.
+The former FSC Resource Platform synchronization code is dormant rollback
+code, not an active or canonical data source. Do not enable it or reintroduce
+hard-coded canonical resource lists without an explicit architecture change.
+Database migrations, admin bootstrap, imports, and seed commands must remain
+explicit operations and must never run automatically at application startup.
 
 Key files:
 - `app/frontend/src/main.jsx` defines the route map.

@@ -1,5 +1,9 @@
 # Local Agent Handoff: Replit Resources and Lightweight SQLite TalkBox
 
+> Archived and superseded. The standalone TalkBox Neon project is canonical;
+> FSC synchronization is disabled. Do not implement this handoff unless an
+> explicit architecture decision restores the former FSC model.
+
 ## Mission
 
 Simplify TalkBox so that:

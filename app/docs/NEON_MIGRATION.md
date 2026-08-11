@@ -4,15 +4,13 @@ Target organization: `org-super-sunset-88688178`
 
 Target project: `soft-hat-27629835`
 
-Neon is the canonical persistence layer owned by the FSC Resource Platform.
-FSC staff update resource data through the Replit-hosted Staff CMS. Ordinary
-TalkBox runtime synchronization uses the authenticated FSC TalkBox API, not a
-raw Neon connection. Kiosks must never receive Neon credentials or the FSC API
-service credential.
+The existing standalone Neon project named `talkbox` is now the canonical
+TalkBox database. Fly FastAPI connects to it with the server-side `DB_URI`;
+Vercel, browsers, and kiosks call FastAPI and never receive Neon credentials.
 
-The direct database procedures below are retained only for one-time migration,
-recovery, and platform-owner maintenance. They are not the normal TalkBox data
-flow and must not be configured as the kiosk integration contract.
+The migration described below is complete. Its import procedures are retained
+only for disaster recovery and rehearsal against a disposable branch. Never
+run them against the populated canonical database during an application deploy.
 
 ## Safety rules
 
@@ -23,7 +21,7 @@ flow and must not be configured as the kiosk integration contract.
   startup.
 - Never point catalog replacement commands at an existing curated database.
 - Use direct connections only for deliberate platform migrations and imports.
-- Do not configure Fly's ordinary resource synchronization against raw Neon.
+- Configure only the Fly backend with the pooled Neon application connection.
 - Treat CSV as one-time import input, not ongoing authority.
 
 ## Required roles
@@ -81,15 +79,14 @@ current authority until cutover.
      python main.py seed-category-vectors
    ```
 
-7. Publish and validate the FSC TalkBox API against the rehearsal data, then
-   build a fresh canonical resource collection from its authenticated
-   bootstrap:
+7. A future direct-resource semantic-search rehearsal may build a fresh,
+   versioned collection from Neon agency rows. The current production database
+   intentionally contains only category-routing vectors.
 
    ```sh
+   # Future command only after the seeder reads canonical Neon agencies:
    DB_URI="$NEON_DIRECT_IMPORTER_URI" \
-     FSC_RESOURCE_API_BASE_URL="$REHEARSAL_FSC_API_BASE_URL" \
-     FSC_RESOURCE_API_KEY="$REHEARSAL_FSC_API_KEY" \
-     AGENCY_COLLECTION_NAME=agency_catalog_v1 \
+     AGENCY_COLLECTION_NAME=agency_catalog_v2 \
      python main.py seed-agency-vectors
    ```
 
@@ -105,23 +102,21 @@ current authority until cutover.
 2. Create a Neon restore point or protected branch before import.
 3. Apply the already-rehearsed migrations to the production branch.
 4. Import and build category-routing vectors using the explicit commands above.
-5. Publish and validate the FSC `/api/v1/talkbox/version` and `/bootstrap`
-   endpoints against the curated production data.
-6. Build and validate a fresh `AGENCY_COLLECTION_NAME` from the authenticated
-   production bootstrap, then configure Fly with that name and
-   `RESOURCE_SEARCH_MODE=vector`.
+5. Configure Fly `DB_URI` with the pooled application credential.
+6. Set `FSC_RESOURCE_SYNC_ENABLED=false`, `KIOSK_MOCK_QUERY=false`, and
+   `TALKBOX_SEED_ADMIN=false`.
 7. Do not configure importer or migrator credentials in Fly runtime secrets.
-8. Configure Fly with `FSC_RESOURCE_API_BASE_URL` and the
-   `FSC_RESOURCE_API_KEY` secret, then verify liveness, sync status, catalog
-   counts, `search_mode=vector`, query relevance, and Twilio webhooks.
+8. Verify liveness, canonical catalog counts, category-vector SQL queries,
+   directory results, and Twilio webhooks.
 9. Keep the Pi's local stack unchanged during the first central API soak test.
 10. Cut one kiosk over first. Retain the known-good local image and database
    dump until online and offline snapshot behavior passes production testing.
 
 ## Collection rotation
 
-`query_categories` routes requests to needs. `agency_catalog_v1` contains FSC
-resource facts for semantic retrieval. They are intentionally separate.
+`query_categories` currently routes requests to categories followed by SQL
+lookup in canonical Neon. A future `agency_catalog_v2` may contain one document
+per Neon agency for direct semantic retrieval. Keep the collections separate.
 
 LangChain stores both collections in `langchain_pg_embedding`. The near-text
 vector is in its `embedding` column, the embedded source text is in `document`,

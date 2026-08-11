@@ -69,7 +69,8 @@ Silicon and on a Raspberry Pi (arm64) unchanged.
 
 ```sh
 cd app
-cp .env.example .env   # the committed local .env already defaults to mock mode
+# Put the server-side TalkBox Neon connection in ignored .env as DB_URI.
+# Keep KIOSK_MOCK_QUERY=false and FSC_RESOURCE_SYNC_ENABLED=false.
 docker compose up --build
 ```
 
@@ -82,8 +83,9 @@ Then open:
 - Admin chat console: <http://localhost:8084/chat>
 - API health: <http://127.0.0.1:8085/api/health>
 
-Normal backend startup never migrates, imports, or seeds data. Initialize a
-disposable local database with the explicit commands in the main README.
+Normal backend startup never migrates, imports, seeds data, or creates an
+administrator. Local FastAPI uses the same canonical Neon database when
+`DB_URI` points to it.
 
 ### Frontend-only dev (hot reload)
 
@@ -95,11 +97,11 @@ npm run dev   # http://localhost:5173/  (proxies /api to the compose backend on 
 
 ## Switching to the real query pipeline
 
-1. Set `OPENAI_API_KEY` in `.env`.
-2. Set `KIOSK_MOCK_QUERY=false`.
-3. Run `python main.py migrate`, then explicitly initialize the catalog and
-  vector collections if the database is empty.
-4. `docker compose up --build` again. Restarts will not mutate catalog data.
+1. Set the canonical Neon connection as `DB_URI` in ignored `.env`.
+2. Set `OPENAI_API_KEY`, `KIOSK_MOCK_QUERY=false`,
+   `FSC_RESOURCE_SYNC_ENABLED=false`, and `TALKBOX_SEED_ADMIN=false`.
+3. Start the backend without running migrations or seed commands.
+4. Restarts will not mutate catalog data.
 
 ## Raspberry Pi notes (later: M9)
 
@@ -116,11 +118,11 @@ npm run dev   # http://localhost:5173/  (proxies /api to the compose backend on 
 
 - Backend: FastAPI (`backend/main.py` → `src.presentation.api:app`). Public:
   `GET /api/health`, `POST /api/query`, `POST /api/sms-query`, auth routers.
-  Kiosk adds: `GET /api/kiosk/config`, `POST /api/kiosk/query`,
+  Kiosk adds: `GET /api/kiosk/config`, `GET /api/kiosk/directory`, `POST /api/kiosk/query`,
   `POST /api/kiosk/speech/transcribe`, `POST /api/kiosk/events`.
 - Query response shape: `{ markdown, results: { type: "agencies"|"doctors",
   category, items_agencies[], items_doctors[] } }`.
 - Frontend: React 19 + Vite 6 + Tailwind 4. Router in `frontend/src/main.jsx`.
-- Data store: Postgres + pgvector (`pgvector/pgvector:pg18`).
+- Canonical data store: the standalone TalkBox Neon Postgres + pgvector database.
 - Compose ports: frontend `127.0.0.1:8084→80`, backend `127.0.0.1:8085→8000`.
   nginx proxies `/api/` → backend, so kiosk endpoints flow through automatically.
