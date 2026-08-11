@@ -112,6 +112,11 @@ def replace_agencies_from_csv(csv_path: Path | None = None) -> tuple[int, int]:
                 """,
                 agency_rows,
             )
+            cur.execute(
+                """INSERT INTO agency_categories (agency_id, category_id)
+                   SELECT id, category_id FROM agencies
+                   WHERE category_id IS NOT NULL"""
+            )
         conn.commit()
 
     logger.info(

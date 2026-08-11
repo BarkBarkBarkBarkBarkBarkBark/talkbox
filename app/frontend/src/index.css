@@ -196,6 +196,56 @@ body {
     sans-serif;
 }
 
+.talkbox-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  color: inherit;
+  font-family:
+    "Rockwell Extra Bold",
+    Rockwell,
+    "Roboto Slab",
+    "Courier New",
+    serif;
+  font-size: clamp(2.75rem, 8vw, 6.75rem);
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  line-height: 0.82;
+  text-transform: uppercase;
+}
+
+.talkbox-logo__word {
+  text-shadow:
+    0.035em 0.045em 0 hsl(0 0% 0% / 0.28),
+    0 0 0.035em hsl(50 90% 65% / 0.18);
+}
+
+.talkbox-logo__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 0.72em;
+  height: 0.72em;
+  color: hsl(50 90% 66%);
+  transform: rotate(-7deg) translateY(-0.04em);
+}
+
+.talkbox-logo__mark svg {
+  width: 0.67em;
+  height: 0.67em;
+  filter: drop-shadow(0.035em 0.045em 0 hsl(0 0% 0% / 0.28));
+}
+
+.talkbox-logo--compact {
+  gap: 0.15em;
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.talkbox-logo--hero {
+  color: hsl(50 90% 66%);
+}
+
 .marketing-hero {
   color: hsl(var(--primary-foreground));
 }
@@ -218,6 +268,34 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
   pointer-events: none;
+}
+
+.marketing-kiosk-photo {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 28rem);
+  margin: 0;
+}
+
+.marketing-kiosk-photo::before {
+  content: "";
+  position: absolute;
+  inset: 8% -8% -3%;
+  z-index: -1;
+  border-radius: 50%;
+  background: hsl(174 62% 44% / 0.32);
+  filter: blur(32px);
+}
+
+.marketing-kiosk-photo__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid hsl(0 0% 100% / 0.2);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 1.5rem 3rem hsl(218 49% 7% / 0.52),
+    0 0 0 0.35rem hsl(0 0% 100% / 0.06);
 }
 
 @keyframes marketing-rise {
@@ -254,6 +332,12 @@ body {
 
 .marketing-step:hover {
   transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-rise {
+    animation: none;
+  }
 }
 
 .marketing-demo-chrome {

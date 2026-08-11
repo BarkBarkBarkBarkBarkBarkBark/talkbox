@@ -42,6 +42,16 @@ def test_admin_agency_visibility_defaults_to_shown() -> None:
     assert agency.show_on_kiosk is True
 
 
+def test_admin_agency_accepts_multiple_categories_and_legacy_category() -> None:
+    multi = AdminAgencyWrite(
+        agency="Community Pantry", categories=["Food", "Housing", "Food"]
+    )
+    legacy = AdminAgencyWrite(agency="Legacy Pantry", category="Food")
+
+    assert multi.categories == ["Food", "Housing"]
+    assert legacy.categories == ["Food"]
+
+
 def test_import_visibility_is_optional_and_parses_hidden_values() -> None:
     legacy, legacy_errors = admin_routes._agency_from_values({"agency": "Legacy"})
     hidden, hidden_errors = admin_routes._agency_from_values(
@@ -52,6 +62,15 @@ def test_import_visibility_is_optional_and_parses_hidden_values() -> None:
     assert legacy["show_on_kiosk"] is True
     assert hidden_errors == []
     assert hidden["show_on_kiosk"] is False
+
+
+def test_import_parses_semicolon_delimited_categories() -> None:
+    row, errors = admin_routes._agency_from_values(
+        {"agency": "Community Hub", "categories": "Food; Housing ;Food"}
+    )
+
+    assert errors == []
+    assert row["categories"] == ["Food", "Housing", "Food"]
 
 
 def test_directory_filters_hidden_rows(monkeypatch) -> None:
@@ -89,6 +108,31 @@ def test_voice_sql_does_not_filter_hidden_rows(monkeypatch) -> None:
 
     assert result["results"]["items_agencies"][0]["name"] == "Voice-only Pantry"
     assert "show_on_kiosk" not in cursor.executed[0][0]
+
+
+def test_voice_sql_uses_multi_category_assignments(monkeypatch) -> None:
+    cursor = FakeCursor(
+        [
+            (
+                "Multi-service Center",
+                "9165550100",
+                "1 Main St",
+                "Food and shelter",
+                None,
+                None,
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        sql_executor, "get_db_connection", lambda: FakeConnection(cursor)
+    )
+
+    result = sql_executor.SQLExecutor().execute_query("Food")
+
+    assert result["results"]["items_agencies"][0]["name"] == "Multi-service Center"
+    query = cursor.executed[0][0]
+    assert "JOIN agency_categories" in query
+    assert "SELECT DISTINCT" in query
 
 
 def test_admin_mutations_require_superuser_dependency() -> None:

@@ -13,14 +13,15 @@ def _clean(value):
 class SQLExecutor(IQueryExecutor):
     def __init__(self):
         self.query_template = """
-        SELECT agencies.agency_name,
+        SELECT DISTINCT agencies.agency_name,
                agencies.phone_number,
                agencies.address,
                agencies.description,
                agencies.insurance,
                agencies.knowledge_tags
         FROM agencies
-        JOIN categories ON agencies.category_id = categories.id
+        JOIN agency_categories ON agency_categories.agency_id = agencies.id
+        JOIN categories ON agency_categories.category_id = categories.id
         WHERE categories.name = %s
         ORDER BY RANDOM()
         LIMIT 5;

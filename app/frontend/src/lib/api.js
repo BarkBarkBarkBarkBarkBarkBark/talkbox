@@ -57,6 +57,11 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(agency),
     }),
+    bulkUpdateAgencies: (changes) => request("/api/admin/agencies/bulk", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    }),
     deleteAgency: (id) => request(`/api/admin/agencies/${id}`, { method: "DELETE" }),
     previewImport: (file) => {
       const data = new FormData();

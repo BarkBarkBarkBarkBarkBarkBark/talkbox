@@ -20,6 +20,7 @@ from src.presentation.auth import current_superuser
 from src.presentation.schemas import (
     AdminAgencyPage,
     AdminAgencyRead,
+    AdminAgencyBulkUpdate,
     AdminAgencyWrite,
     AdminCategoryRead,
     AdminImportPreview,
@@ -32,7 +33,7 @@ CANONICAL_COLUMNS = (
     "agency",
     "phone_number",
     "address",
-    "category",
+    "categories",
     "description",
     "insurance",
     "knowledge_tags",
@@ -49,9 +50,10 @@ HEADER_ALIASES = {
     "telephone": "phone_number",
     "address": "address",
     "location": "address",
-    "category": "category",
-    "service_category": "category",
-    "service_type": "category",
+    "category": "categories",
+    "categories": "categories",
+    "service_category": "categories",
+    "service_type": "categories",
     "description": "description",
     "services": "description",
     "insurance": "insurance",
@@ -82,6 +84,10 @@ def _agency_from_values(values: dict[str, object]) -> tuple[dict | None, list[st
         for column in CANONICAL_COLUMNS
         if column != "show_on_kiosk"
     }
+    categories = _clean(values.get("categories"))
+    row["categories"] = [
+        category.strip() for category in (categories or "").split(";") if category.strip()
+    ]
     raw_visibility = _clean(values.get("show_on_kiosk"))
     row["show_on_kiosk"] = (
         True
@@ -134,23 +140,52 @@ def _parse_rows(filename: str, payload: bytes) -> tuple[list[tuple[int, dict | N
     return parsed, source_errors
 
 
-def _category_id(cur, category: str | None) -> int | None:
-    if not category:
-        return None
-    cur.execute(
-        "INSERT INTO categories (name) VALUES (%s) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-        (category,),
-    )
-    return cur.fetchone()["id"]
+def _category_ids(cur, categories: list[str]) -> list[int]:
+    category_ids = []
+    for category in categories:
+        cur.execute(
+            """INSERT INTO categories (name) VALUES (%s)
+               ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id""",
+            (category,),
+        )
+        category_ids.append(cur.fetchone()["id"])
+    return category_ids
+
+
+def _replace_agency_categories(cur, agency_id: int, category_ids: list[int]) -> None:
+    cur.execute("DELETE FROM agency_categories WHERE agency_id = %s", (agency_id,))
+    if category_ids:
+        cur.executemany(
+            """INSERT INTO agency_categories (agency_id, category_id)
+               VALUES (%s, %s) ON CONFLICT DO NOTHING""",
+            [(agency_id, category_id) for category_id in category_ids],
+        )
+
+
+def _agency_select(where: str) -> str:
+    return f"""
+        SELECT a.id, a.agency_name AS agency, a.phone_number, a.address,
+               COALESCE(
+                   array_agg(c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
+                   ARRAY[]::varchar[]
+               ) AS categories,
+               a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
+        FROM agencies a
+        LEFT JOIN agency_categories ac ON ac.agency_id = a.id
+        LEFT JOIN categories c ON c.id = ac.category_id
+        {where}
+        GROUP BY a.id
+    """
 
 
 def _write_agency(cur, payload: AdminAgencyWrite, agency_id: int | None = None) -> dict:
-    category_id = _category_id(cur, payload.category)
+    category_ids = _category_ids(cur, payload.categories)
+    primary_category_id = category_ids[0] if category_ids else None
     values = (
         payload.agency,
         payload.phone_number,
         payload.address,
-        category_id,
+        primary_category_id,
         payload.description,
         payload.insurance,
         payload.knowledge_tags,
@@ -174,12 +209,8 @@ def _write_agency(cur, payload: AdminAgencyWrite, agency_id: int | None = None) 
         )
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Resource not found.")
-    cur.execute(
-        """SELECT a.id, a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                  a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
-           FROM agencies a LEFT JOIN categories c ON c.id = a.category_id WHERE a.id = %s""",
-        (agency_id,),
-    )
+    _replace_agency_categories(cur, agency_id, category_ids)
+    cur.execute(_agency_select("WHERE a.id = %s"), (agency_id,))
     return cur.fetchone()
 
 
@@ -196,22 +227,25 @@ def list_agencies(
         filters.append("(a.agency_name ILIKE %s OR a.address ILIKE %s OR a.description ILIKE %s)")
         values.extend([f"%{search.strip()}%"] * 3)
     if category:
-        filters.append("c.name = %s")
+        filters.append(
+            """EXISTS (
+                SELECT 1 FROM agency_categories ac_filter
+                JOIN categories c_filter ON c_filter.id = ac_filter.category_id
+                WHERE ac_filter.agency_id = a.id AND c_filter.name = %s
+            )"""
+        )
         values.append(category)
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with _connection() as conn, conn.cursor() as cur:
         cur.execute(
             f"""SELECT count(*) AS total,
                        count(*) FILTER (WHERE a.show_on_kiosk) AS visible_total
-                FROM agencies a LEFT JOIN categories c ON c.id = a.category_id {where}""",
+                FROM agencies a {where}""",
             values,
         )
         counts = cur.fetchone()
         cur.execute(
-            f"""SELECT a.id, a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                       a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
-                FROM agencies a LEFT JOIN categories c ON c.id = a.category_id {where}
-                ORDER BY a.agency_name, a.id LIMIT %s OFFSET %s""",
+            _agency_select(where) + " ORDER BY agency, id LIMIT %s OFFSET %s",
             (*values, page_size, (page - 1) * page_size),
         )
         items = cur.fetchall()
@@ -227,8 +261,12 @@ def list_agencies(
 @router.get("/categories", response_model=list[AdminCategoryRead])
 def list_categories(_: User = Depends(current_superuser)) -> list[AdminCategoryRead]:
     with _connection() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT c.id, c.name, count(a.id)::int AS agency_count FROM categories c
-                     LEFT JOIN agencies a ON a.category_id = c.id GROUP BY c.id ORDER BY c.name""")
+        cur.execute(
+            """SELECT c.id, c.name, count(ac.agency_id)::int AS agency_count
+               FROM categories c
+               LEFT JOIN agency_categories ac ON ac.category_id = c.id
+               GROUP BY c.id ORDER BY c.name"""
+        )
         return cur.fetchall()
 
 
@@ -238,6 +276,35 @@ def create_agency(payload: AdminAgencyWrite, _: User = Depends(current_superuser
         agency = _write_agency(cur, payload)
         conn.commit()
         return agency
+
+
+@router.patch("/agencies/bulk")
+def bulk_update_agencies(
+    payload: AdminAgencyBulkUpdate, _: User = Depends(current_superuser)
+) -> dict[str, int]:
+    with _connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM agencies WHERE id = ANY(%s) FOR UPDATE", (payload.ids,)
+        )
+        agency_ids = [row["id"] for row in cur.fetchall()]
+        if len(agency_ids) != len(set(payload.ids)):
+            raise HTTPException(status_code=404, detail="One or more resources were not found.")
+        if payload.categories is not None:
+            category_ids = _category_ids(cur, payload.categories)
+            primary_category_id = category_ids[0] if category_ids else None
+            cur.execute(
+                "UPDATE agencies SET category_id = %s WHERE id = ANY(%s)",
+                (primary_category_id, agency_ids),
+            )
+            for agency_id in agency_ids:
+                _replace_agency_categories(cur, agency_id, category_ids)
+        if payload.show_on_kiosk is not None:
+            cur.execute(
+                "UPDATE agencies SET show_on_kiosk = %s WHERE id = ANY(%s)",
+                (payload.show_on_kiosk, agency_ids),
+            )
+        conn.commit()
+    return {"updated": len(agency_ids)}
 
 
 @router.patch("/agencies/{agency_id}", response_model=AdminAgencyRead)
@@ -260,9 +327,15 @@ def delete_agency(agency_id: int, _: User = Depends(current_superuser)) -> None:
 @router.get("/agencies/export")
 def export_agencies(_: User = Depends(current_superuser)) -> StreamingResponse:
     with _connection() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT a.agency_name AS agency, a.phone_number, a.address, c.name AS category,
-                              a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
-                       FROM agencies a LEFT JOIN categories c ON c.id = a.category_id ORDER BY a.agency_name""")
+        cur.execute(
+            """SELECT a.agency_name AS agency, a.phone_number, a.address,
+                      COALESCE(string_agg(c.name, ';' ORDER BY c.name), '') AS categories,
+                      a.description, a.insurance, a.knowledge_tags, a.show_on_kiosk
+               FROM agencies a
+               LEFT JOIN agency_categories ac ON ac.agency_id = a.id
+               LEFT JOIN categories c ON c.id = ac.category_id
+               GROUP BY a.id ORDER BY a.agency_name"""
+        )
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=CANONICAL_COLUMNS)
         writer.writeheader()

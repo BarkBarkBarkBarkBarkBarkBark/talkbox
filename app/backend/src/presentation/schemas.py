@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class QueryRequest(BaseModel):
@@ -61,15 +61,48 @@ class AdminAgencyWrite(BaseModel):
     agency: str = Field(min_length=1, max_length=255)
     phone_number: str | None = Field(default=None, max_length=50)
     address: str | None = None
-    category: str | None = Field(default=None, max_length=100)
+    categories: list[str] = Field(default_factory=list)
+    category: str | None = Field(default=None, exclude=True, max_length=100)
     description: str | None = None
     insurance: str | None = Field(default=None, max_length=255)
     knowledge_tags: str | None = None
     show_on_kiosk: bool = True
 
+    @model_validator(mode="after")
+    def normalize_categories(self):
+        values = self.categories or ([self.category] if self.category else [])
+        self.categories = list(
+            dict.fromkeys(
+                value.strip()
+                for value in values
+                if isinstance(value, str) and value.strip()
+            )
+        )
+        return self
+
 
 class AdminAgencyRead(AdminAgencyWrite):
     id: int
+
+
+class AdminAgencyBulkUpdate(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=100)
+    categories: list[str] | None = None
+    show_on_kiosk: bool | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.categories is None and self.show_on_kiosk is None:
+            raise ValueError("Select categories or Browse visibility to update.")
+        if self.categories is not None:
+            self.categories = list(
+                dict.fromkeys(
+                    value.strip()
+                    for value in self.categories
+                    if isinstance(value, str) and value.strip()
+                )
+            )
+        return self
 
 
 class AdminAgencyPage(BaseModel):

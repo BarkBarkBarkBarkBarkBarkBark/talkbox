@@ -1,36 +1,47 @@
 import { Link } from "react-router-dom";
 import { Phone, MapPin, Shield } from "lucide-react";
+import TalkBoxLogo from "../components/marketing/TalkBoxLogo.jsx";
 import { Button } from "../components/ui/Button.jsx";
+import kioskPhoto from "../../../../ChatGPT Image Aug 10, 2026 at 06_03_59 PM.png";
 
 export default function MarketingHomePage() {
   return (
     <div className="marketing-home">
       <section className="marketing-hero relative isolate overflow-hidden">
         <div className="marketing-hero-backdrop" aria-hidden />
-        <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] max-w-5xl flex-col justify-end px-5 pb-16 pt-20 sm:px-8 sm:pb-24 sm:pt-28">
-          <p className="marketing-rise marketing-rise-1 font-marketing text-sm font-semibold uppercase tracking-[0.2em] text-primary-foreground/80">
-            Community infrastructure
-          </p>
-          <h1 className="marketing-rise marketing-rise-2 mt-4 font-marketing text-5xl font-bold leading-[1.05] tracking-tight text-primary-foreground sm:text-6xl md:text-7xl">
-            Talk Box
-          </h1>
-          <p className="marketing-rise marketing-rise-3 mt-5 max-w-xl text-lg leading-relaxed text-primary-foreground/90 sm:text-xl">
-            A payphone for the 21st century — a public kiosk that connects people
-            without phones to 211 and local help, with one big button.
-          </p>
-          <div className="marketing-rise marketing-rise-4 mt-10 flex flex-wrap gap-3">
-            <Button asChild size="lg" variant="secondary" className="min-w-[9.5rem] shadow-sm">
-              <Link to="/demo">Try the demo</Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="min-w-[9.5rem] border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-            >
-              <Link to="/donate">Donate</Link>
-            </Button>
+        <div className="relative mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-8 px-5 py-14 sm:px-8 md:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)] md:gap-12 md:py-20">
+          <div className="relative z-10">
+            <p className="marketing-rise marketing-rise-1 font-marketing text-sm font-semibold uppercase tracking-[0.2em] text-primary-foreground/80">
+              Community infrastructure
+            </p>
+            <h1 className="marketing-rise marketing-rise-2 mt-4">
+              <TalkBoxLogo className="talkbox-logo--hero" />
+            </h1>
+            <p className="marketing-rise marketing-rise-3 mt-6 max-w-xl text-lg leading-relaxed text-primary-foreground/90 sm:text-xl">
+              A payphone for the 21st century — a public kiosk that connects people
+              without phones to 211 and local help, with one big button.
+            </p>
+            <div className="marketing-rise marketing-rise-4 mt-10 flex flex-wrap gap-3">
+              <Button asChild size="lg" variant="secondary" className="min-w-[9.5rem] shadow-sm">
+                <Link to="/demo">Try the demo</Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="min-w-[9.5rem] border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              >
+                <Link to="/donate">Donate</Link>
+              </Button>
+            </div>
           </div>
+          <figure className="marketing-kiosk-photo marketing-rise marketing-rise-3">
+            <img
+              src={kioskPhoto}
+              alt="Talk Box community assistance kiosk"
+              className="marketing-kiosk-photo__image"
+            />
+          </figure>
         </div>
       </section>
 

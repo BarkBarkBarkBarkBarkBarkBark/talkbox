@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api.js";
@@ -8,7 +8,7 @@ const EMPTY_AGENCY = {
   agency: "",
   phone_number: "",
   address: "",
-  category: "",
+  categories: [],
   description: "",
   insurance: "",
   knowledge_tags: "",
@@ -19,8 +19,9 @@ function errorMessage(error) {
   return error?.message || "Something went wrong. Please try again.";
 }
 
-function AgencyForm({ agency, onCancel, onSave, saving }) {
+function AgencyForm({ agency, categories, onCancel, onSave, saving }) {
   const [values, setValues] = useState(agency || EMPTY_AGENCY);
+  const [categorySearch, setCategorySearch] = useState("");
 
   function update(event) {
     setValues((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -31,6 +32,24 @@ function AgencyForm({ agency, onCancel, onSave, saving }) {
     await onSave(values);
   }
 
+  const selectedCategories = values.categories || [];
+  const matchingCategories = categories.filter((category) =>
+    category.name.toLowerCase().includes(categorySearch.trim().toLowerCase())
+  );
+  const normalizedSearch = categorySearch.trim();
+  const canCreateCategory = normalizedSearch
+    && !categories.some((category) => category.name.toLowerCase() === normalizedSearch.toLowerCase())
+    && !selectedCategories.some((category) => category.toLowerCase() === normalizedSearch.toLowerCase());
+
+  function toggleCategory(name) {
+    setValues((current) => ({
+      ...current,
+      categories: current.categories?.includes(name)
+        ? current.categories.filter((category) => category !== name)
+        : [...(current.categories || []), name],
+    }));
+  }
+
   return (
     <form onSubmit={submit} className="grid gap-3 border-b border-border bg-secondary/35 p-4 sm:grid-cols-2">
       <label className="grid gap-1 text-base font-semibold">Organization
@@ -39,8 +58,17 @@ function AgencyForm({ agency, onCancel, onSave, saving }) {
       <label className="grid gap-1 text-base font-semibold">Phone
         <input name="phone_number" value={values.phone_number || ""} onChange={update} className="h-10 rounded-md border border-input bg-background px-3 font-normal" />
       </label>
-      <label className="grid gap-1 text-base font-semibold">Category
-        <input name="category" value={values.category || ""} onChange={update} className="h-10 rounded-md border border-input bg-background px-3 font-normal" />
+      <label className="grid gap-1 text-base font-semibold sm:col-span-2">Categories
+        <input value={categorySearch} onChange={(event) => setCategorySearch(event.target.value)} placeholder="Search or add a category" className="h-10 rounded-md border border-input bg-background px-3 font-normal" />
+        {canCreateCategory ? <Button type="button" variant="outline" className="mt-2 self-start" onClick={() => { toggleCategory(normalizedSearch); setCategorySearch(""); }}>Add “{normalizedSearch}”</Button> : null}
+        <div className="mt-2 grid max-h-44 grid-cols-1 gap-1 overflow-y-auto rounded-md border border-input bg-background p-2 sm:grid-cols-2">
+          {matchingCategories.map((category) => <label key={category.id} className="flex items-center gap-2 rounded px-2 py-1 font-normal hover:bg-secondary">
+            <input type="checkbox" checked={selectedCategories.includes(category.name)} onChange={() => toggleCategory(category.name)} className="h-4 w-4 accent-primary" />
+            {category.name}
+          </label>)}
+          {!matchingCategories.length && !canCreateCategory ? <p className="px-2 py-1 font-normal text-muted-foreground">No matching categories.</p> : null}
+        </div>
+        {selectedCategories.length ? <div className="mt-2 flex flex-wrap gap-1">{selectedCategories.map((category) => <button key={category} type="button" onClick={() => toggleCategory(category)} className="rounded-full bg-primary/10 px-2 py-1 text-sm font-normal text-primary">{category} ×</button>)}</div> : <p className="mt-1 font-normal text-muted-foreground">Select every category this resource serves.</p>}
       </label>
       <label className="grid gap-1 text-base font-semibold">Insurance
         <input name="insurance" value={values.insurance || ""} onChange={update} className="h-10 rounded-md border border-input bg-background px-3 font-normal" />
@@ -112,6 +140,7 @@ function LoginGate({ onLoggedIn }) {
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(null);
+  const sessionCheckId = useRef(0);
   const [resources, setResources] = useState({ items: [], total: 0, visible_total: 0, page: 1, page_size: 25 });
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
@@ -122,13 +151,18 @@ export default function AdminPage() {
   const [preview, setPreview] = useState(null);
   const [previewRows, setPreviewRows] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkCategories, setBulkCategories] = useState([]);
+  const [bulkCategorySearch, setBulkCategorySearch] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   async function checkSession() {
+    const checkId = ++sessionCheckId.current;
     try {
       await api.admin.currentUser();
-      setAuthenticated(true);
+      if (checkId === sessionCheckId.current) setAuthenticated(true);
     } catch {
-      setAuthenticated(false);
+      if (checkId === sessionCheckId.current) setAuthenticated(false);
     }
   }
 
@@ -140,6 +174,7 @@ export default function AdminPage() {
       ]);
       setResources(agencyPage);
       setCategories(categoryList);
+      setSelectedIds((current) => current.filter((id) => agencyPage.items.some((item) => item.id === id)));
     } catch (error) {
       if (error.status === 401 || error.status === 403) setAuthenticated(false);
       else toast.error(errorMessage(error));
@@ -187,6 +222,30 @@ export default function AdminPage() {
       toast.success(agency.show_on_kiosk === false ? "Resource shown in Browse." : "Resource hidden from Browse.");
     } catch (error) {
       toast.error(errorMessage(error));
+    }
+  }
+
+  function toggleSelected(id) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleBulkCategory(name) {
+    setBulkCategories((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
+  }
+
+  async function applyBulkChanges(changes, message) {
+    if (!selectedIds.length) return;
+    setBulkSaving(true);
+    try {
+      const result = await api.admin.bulkUpdateAgencies({ ids: selectedIds, ...changes });
+      setSelectedIds([]);
+      setBulkCategories([]);
+      await loadResources();
+      toast.success(`${result.updated} resources ${message}.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setBulkSaving(false);
     }
   }
 
@@ -243,7 +302,12 @@ export default function AdminPage() {
   }
 
   if (authenticated === null) return null;
-  if (!authenticated) return <LoginGate onLoggedIn={checkSession} />;
+  if (!authenticated) {
+    return <LoginGate onLoggedIn={() => {
+      sessionCheckId.current += 1;
+      setAuthenticated(true);
+    }} />;
+  }
 
   const pages = Math.max(1, Math.ceil(resources.total / resources.page_size));
   return (
@@ -297,16 +361,27 @@ export default function AdminPage() {
               {categories.map((item) => <option key={item.id} value={item.name}>{item.name} ({item.agency_count})</option>)}
             </select>
           </div>
-          {editing ? <AgencyForm agency={editing} saving={saving} onCancel={() => setEditing(null)} onSave={saveAgency} /> : null}
+          {editing ? <AgencyForm agency={editing} categories={categories} saving={saving} onCancel={() => setEditing(null)} onSave={saveAgency} /> : null}
+          {selectedIds.length ? <section className="flex flex-wrap items-center gap-3 border-b border-border bg-primary/5 p-4">
+            <strong>{selectedIds.length} selected</strong>
+            <Button size="sm" variant="outline" disabled={bulkSaving} onClick={() => applyBulkChanges({ show_on_kiosk: true }, "shown in Browse")}>Show in Browse</Button>
+            <Button size="sm" variant="outline" disabled={bulkSaving} onClick={() => applyBulkChanges({ show_on_kiosk: false }, "hidden from Browse")}>Hide from Browse</Button>
+            <label className="min-w-48 flex-1">Replace categories
+              <input value={bulkCategorySearch} onChange={(event) => setBulkCategorySearch(event.target.value)} placeholder="Filter categories" className="ml-2 h-9 rounded-md border border-input bg-background px-2" />
+            </label>
+            <div className="flex max-w-full flex-wrap gap-1">{categories.filter((item) => item.name.toLowerCase().includes(bulkCategorySearch.toLowerCase())).map((item) => <label key={item.id} className="rounded bg-background px-2 py-1 text-sm"><input type="checkbox" checked={bulkCategories.includes(item.name)} onChange={() => toggleBulkCategory(item.name)} className="mr-1 accent-primary" />{item.name}</label>)}</div>
+            <Button size="sm" disabled={bulkSaving} onClick={() => applyBulkChanges({ categories: bulkCategories }, "updated")}>Apply categories</Button>
+            <Button size="sm" variant="ghost" disabled={bulkSaving} onClick={() => setSelectedIds([])}>Clear selection</Button>
+          </section> : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-220 text-left text-base">
               <thead className="border-b border-border bg-secondary/50 text-muted-foreground"><tr>
-                <th className="px-4 py-3 font-semibold">Organization</th><th className="px-4 py-3 font-semibold">Browse</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Phone</th><th className="px-4 py-3 font-semibold">Address</th><th className="w-32 px-4 py-3"><span className="sr-only">Actions</span></th>
+                <th className="px-4 py-3"><input type="checkbox" aria-label="Select all resources on this page" checked={resources.items.length > 0 && resources.items.every((agency) => selectedIds.includes(agency.id))} onChange={(event) => setSelectedIds(event.target.checked ? resources.items.map((agency) => agency.id) : [])} /></th><th className="px-4 py-3 font-semibold">Organization</th><th className="px-4 py-3 font-semibold">Browse</th><th className="px-4 py-3 font-semibold">Categories</th><th className="px-4 py-3 font-semibold">Phone</th><th className="px-4 py-3 font-semibold">Address</th><th className="w-32 px-4 py-3"><span className="sr-only">Actions</span></th>
               </tr></thead>
               <tbody>{resources.items.map((agency) => <tr key={agency.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 font-semibold">{agency.agency}<p className="mt-1 font-normal text-muted-foreground">{agency.description}</p></td>
+                <td className="px-4 py-3"><input type="checkbox" aria-label={`Select ${agency.agency}`} checked={selectedIds.includes(agency.id)} onChange={() => toggleSelected(agency.id)} /></td><td className="px-4 py-3 font-semibold">{agency.agency}<p className="mt-1 font-normal text-muted-foreground">{agency.description}</p></td>
                 <td className="px-4 py-3"><Button size="icon" variant="ghost" title={agency.show_on_kiosk === false ? "Show in kiosk Browse" : "Hide from kiosk Browse"} aria-label={agency.show_on_kiosk === false ? "Show in kiosk Browse" : "Hide from kiosk Browse"} onClick={() => toggleVisibility(agency)}>{agency.show_on_kiosk === false ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-primary" />}</Button></td>
-                <td className="px-4 py-3">{agency.category || "Uncategorized"}</td><td className="px-4 py-3">{agency.phone_number || "-"}</td><td className="px-4 py-3">{agency.address || "-"}</td>
+                <td className="px-4 py-3">{agency.categories?.length ? <div className="flex flex-wrap gap-1">{agency.categories.map((item) => <span key={item} className="rounded-full bg-secondary px-2 py-1 text-sm">{item}</span>)}</div> : "Uncategorized"}</td><td className="px-4 py-3">{agency.phone_number || "-"}</td><td className="px-4 py-3">{agency.address || "-"}</td>
                 <td className="px-4 py-3"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit resource" aria-label="Edit resource" onClick={() => setEditing(agency)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete resource" aria-label="Delete resource" onClick={() => removeAgency(agency)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></td>
               </tr>)}</tbody>
             </table>
