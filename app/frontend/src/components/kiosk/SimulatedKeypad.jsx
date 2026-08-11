@@ -25,18 +25,18 @@ const FULL = [
   { label: "/", token: "CYCLE_TAB" },
   { label: "*", token: "*" },
   { label: "⌫", token: "BS" },
+  { label: "–", token: "PREV" },
   { label: "7", token: "7" },
   { label: "8", token: "8" },
   { label: "9", token: "9" },
-  { label: "–", token: "PREV" },
+  { label: "+", token: "NEXT", rowSpan: 2 },
   { label: "4", token: "4" },
   { label: "5", token: "5" },
   { label: "6", token: "6" },
-  { label: "+", token: "NEXT" },
   { label: "1", token: "1" },
   { label: "2", token: "2" },
   { label: "3", token: "3" },
-  { label: "↵", token: "#" },
+  { label: "↵", token: "#", rowSpan: 2 },
   { label: "0", token: "0", span: 2 },
   { label: ".", token: "DIAL" },
 ];
@@ -51,7 +51,14 @@ export default function SimulatedKeypad({ onKey, variant = "numeric" }) {
           type="button"
           onClick={() => onKey?.(k.token)}
           aria-label={`Key ${k.label}`}
-          style={k.span ? { gridColumn: `span ${k.span}` } : undefined}
+          style={
+            k.span || k.rowSpan
+              ? {
+                  ...(k.span ? { gridColumn: `span ${k.span}` } : {}),
+                  ...(k.rowSpan ? { gridRow: `span ${k.rowSpan}` } : {}),
+                }
+              : undefined
+          }
         >
           {k.label}
         </button>
