@@ -26,6 +26,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: api
+      args:
+        WHISPER_JOBS: ${WHISPER_JOBS:-}
+        CARGO_BUILD_JOBS: ${CARGO_BUILD_JOBS:-}
+        MAKEFLAGS: ${MAKEFLAGS:-}
     ports:
       # Loopback-only: host tooling can hit the API directly at 127.0.0.1:8085
       # while external traffic keeps flowing through nginx on the frontend.
@@ -56,6 +60,7 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL:-}
         - VITE_APP_NAME=${VITE_APP_NAME:-Talk Box}
+        - NODE_OPTIONS=${NODE_OPTIONS:-}
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-8084}:80"
     volumes:

@@ -132,6 +132,24 @@ cleanup_stale_containers() {
     fi
 }
 
+low_memory_host() {
+    # 2 GB kiosks OOM if backend+frontend compile in parallel (BuildKit).
+    local mem_kb
+    mem_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+    [ "${mem_kb:-0}" -gt 0 ] && [ "${mem_kb:-0}" -lt 3500000 ]
+}
+
+serial_compose_rebuild() {
+    export WHISPER_JOBS=1 CARGO_BUILD_JOBS=1 MAKEFLAGS=-j1
+    export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=256}"
+    export DOCKER_BUILDKIT=0
+    note "Low-memory host: stop UI, build one image at a time, 1 compile job"
+    docker stop talkbox-frontend talkbox-backend >/dev/null 2>&1 || true
+    docker compose build talkbox-frontend || return 1
+    docker compose build talkbox-backend || return 1
+    docker compose up -d --no-build --remove-orphans
+}
+
 summary_box() {
     # NB: docker-compose binds 127.0.0.1 only — the kiosk is reachable on this
     # machine, not on the LAN, unless compose is edited.
@@ -178,7 +196,12 @@ cmd_update() {
     step "Rebuilding and relaunching containers"
     cleanup_stale_containers
     local compose_output
-    if ! compose_output="$(docker compose up -d --build 2>&1)"; then
+    if low_memory_host; then
+        if ! compose_output="$(serial_compose_rebuild 2>&1)"; then
+            echo "$compose_output" | grep -E 'Built|Started|Healthy|Error|Conflict|failed|Error response' | sed 's/^ */  /' || true
+            fail "Compose rebuild/relaunch failed"
+        fi
+    elif ! compose_output="$(docker compose up -d --build 2>&1)"; then
         echo "$compose_output" | grep -E 'Built|Started|Healthy|Error|Conflict|failed|Error response' | sed 's/^ */  /' || true
         fail "Compose rebuild/relaunch failed"
     fi
@@ -437,6 +460,40 @@ cmd_doctor() {
     else
         warn "talkbox-stack.service not enabled — run kiosk-setup.sh"
         problems=$((problems + 1))
+    fi
+
+    echo ""
+    echo -e "${BOLD}Twilio webhook${NC}"
+    if [ -f "$ENV_FILE" ] && docker ps --filter "name=talkbox-backend" --format '{{.Status}}' 2>/dev/null | grep -q 'Up'; then
+        local webhook_alerts
+        webhook_alerts="$(docker exec talkbox-backend python -c '
+from datetime import datetime, timedelta, timezone
+from twilio.rest import Client
+from src.infrastructure.config import settings
+c = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+n = 0
+for a in c.monitor.v1.alerts.list(limit=25):
+    if str(a.error_code) != "11200":
+        continue
+    created = a.date_created
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if created >= cutoff:
+        n += 1
+print(n)
+' 2>/dev/null || echo "?")"
+        if [ "$webhook_alerts" = "0" ]; then
+            ok "no Twilio 11200 webhook failures in the last hour"
+        elif [ "$webhook_alerts" = "?" ]; then
+            warn "could not query Twilio Monitor for webhook 502s"
+            problems=$((problems + 1))
+        else
+            warn "Twilio 11200 (TwiML HTTP 502) x${webhook_alerts} in the last hour — Funnel/public URL unreachable"
+            problems=$((problems + 1))
+        fi
+    else
+        warn "skip Twilio webhook check (backend down)"
     fi
 
     echo ""

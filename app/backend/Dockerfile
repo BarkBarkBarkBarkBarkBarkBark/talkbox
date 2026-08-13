@@ -4,6 +4,8 @@
 # reaches the final image except the resolved virtualenv.
 FROM python:3.13-alpine AS builder
 
+ARG CARGO_BUILD_JOBS
+ARG MAKEFLAGS
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
@@ -24,7 +26,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/uv
 
 COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN if [ -z "${CARGO_BUILD_JOBS}" ]; then unset CARGO_BUILD_JOBS; fi; \
+    if [ -z "${MAKEFLAGS}" ]; then unset MAKEFLAGS; fi; \
+    uv sync --frozen --no-dev --no-install-project
 
 
 # ─── whisper.cpp ─────────────────────────────────────────────────────────────
@@ -33,6 +37,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 FROM alpine:3.22 AS whisper-builder
 
 ARG WHISPER_CPP_VERSION=v1.7.6
+ARG WHISPER_JOBS
 
 RUN apk add --no-cache build-base cmake git
 RUN git clone --branch "${WHISPER_CPP_VERSION}" --depth 1 \
@@ -43,7 +48,7 @@ RUN git clone --branch "${WHISPER_CPP_VERSION}" --depth 1 \
             -DGGML_NATIVE=OFF \
             -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_SERVER=OFF \
-        && cmake --build /src/build --config Release --target whisper-cli --parallel
+        && cmake --build /src/build --config Release --target whisper-cli --parallel "${WHISPER_JOBS:-$(nproc)}"
 
 
 # ─── Runtime ─────────────────────────────────────────────────────────────────

@@ -58,6 +58,10 @@ export function useKioskVoiceCall({ onStatus }) {
         device = new Device(tokenData.token, {
           logLevel: "warn",
           codecPreferences: ["opus", "pcmu"],
+          // Local ringback + ringing events. Without this, accept() fires as
+          // soon as Twilio has the call, so the kiosk shows "Live call" with
+          // silence until 211 actually answers.
+          enableRingingState: true,
         });
         deviceRef.current = device;
       } catch (err) {

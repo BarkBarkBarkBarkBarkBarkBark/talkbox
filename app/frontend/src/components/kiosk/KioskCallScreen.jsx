@@ -9,7 +9,7 @@ export function KioskCallConfirm({ item }) {
         <p className="kiosk-subtitle">{item?.name}</p>
         {item?.phone_display ? <p className="kiosk-phone">{item.phone_display}</p> : null}
         <p className="kiosk-subtitle" style={{ fontSize: "clamp(0.8rem,1.8vh,0.95rem)", opacity: 0.7 }}>
-          This is a live call — please speak clearly into the microphone.
+          This will place a real phone call. Speak into the speakerphone.
         </p>
         <p className="kiosk-subtitle">
           Press <strong>Enter</strong> to call · <strong>Backspace</strong> to cancel

@@ -4,11 +4,15 @@ os.environ.setdefault(
     "DB_URI", "postgresql+psycopg://talkbox:test@localhost:5432/talkbox"
 )
 
+from pathlib import Path
+
 from src.infrastructure import agency_repository
 from src.infrastructure.sql_agent import sql_executor
 from src.presentation import admin_routes
 from src.presentation.auth import current_superuser
 from src.presentation.schemas import AdminAgencyWrite
+
+_APP_DIR = Path(__file__).resolve().parents[2]
 
 
 class FakeCursor:
@@ -133,6 +137,24 @@ def test_voice_sql_uses_multi_category_assignments(monkeypatch) -> None:
     query = cursor.executed[0][0]
     assert "JOIN agency_categories" in query
     assert "SELECT DISTINCT" in query
+    # Postgres rejects DISTINCT + ORDER BY RANDOM() in the same SELECT.
+    assert "AS distinct_agencies" in query
+    inner, _, outer = query.partition("AS distinct_agencies")
+    assert "SELECT DISTINCT" in inner
+    assert "ORDER BY RANDOM()" in outer
+
+
+def test_marketing_home_image_lives_inside_frontend_tree() -> None:
+    page = _APP_DIR / "frontend/src/pages/MarketingHomePage.jsx"
+    src = page.read_text()
+    assert "../../../../" not in src
+    assert "assets/kiosk-photo" in src
+    assert (_APP_DIR / "frontend/src/assets/kiosk-photo.png").is_file()
+
+
+def test_kiosk_voice_enables_ringback_before_live_badge() -> None:
+    hook = (_APP_DIR / "frontend/src/hooks/useKioskVoiceCall.js").read_text()
+    assert "enableRingingState: true" in hook
 
 
 def test_admin_mutations_require_superuser_dependency() -> None:

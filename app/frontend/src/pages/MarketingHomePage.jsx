@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Phone, MapPin, Shield } from "lucide-react";
 import TalkBoxLogo from "../components/marketing/TalkBoxLogo.jsx";
 import { Button } from "../components/ui/Button.jsx";
-import kioskPhoto from "../../../../ChatGPT Image Aug 10, 2026 at 06_03_59 PM.png";
+import kioskPhoto from "../assets/kiosk-photo.png";
 
 export default function MarketingHomePage() {
   return (
