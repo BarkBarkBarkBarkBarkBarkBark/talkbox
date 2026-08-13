@@ -347,3 +347,114 @@ body {
 .marketing-demo-chrome {
   box-shadow: 0 1px 0 hsl(var(--border));
 }
+
+/* ───── Did You Know? panel ───── */
+
+.dyk-panel {
+  border-top: 3px solid hsl(var(--primary));
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--primary) / 0.05);
+  animation: marketing-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.55s;
+}
+
+.dyk-panel__inner {
+  position: relative;
+  margin: 0 auto;
+  max-width: 56rem;
+  padding: 1.25rem 4rem 1.5rem 1.5rem;
+}
+
+.dyk-panel__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.dyk-panel__eyebrow {
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+}
+
+.dyk-panel__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.dyk-panel__close:hover {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.dyk-panel__close:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.dyk-panel__body {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: hsl(var(--foreground) / 0.85);
+  max-width: 52rem;
+}
+
+.dyk-panel__body p {
+  margin: 0 0 0.6rem;
+}
+
+.dyk-panel__body p:last-child {
+  margin-bottom: 0;
+}
+
+.dyk-panel__body ul {
+  margin: 0.2rem 0 0.6rem 1.2rem;
+  padding: 0;
+  list-style: disc;
+}
+
+.dyk-panel__body ul li {
+  margin-bottom: 0.2rem;
+}
+
+.dyk-panel__callout {
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.dyk-panel__coda {
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 480px) {
+  .dyk-panel__inner {
+    padding: 1rem 3rem 1.25rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dyk-panel {
+    animation: none;
+  }
+}
