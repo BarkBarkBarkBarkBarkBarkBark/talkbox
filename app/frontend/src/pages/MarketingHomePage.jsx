@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Phone, MapPin, Shield } from "lucide-react";
 import TalkBoxLogo from "../components/marketing/TalkBoxLogo.jsx";
 import { Button } from "../components/ui/Button.jsx";
@@ -6,6 +7,15 @@ import DidYouKnowPanel from "../components/marketing/DidYouKnowPanel.jsx";
 import kioskPhoto from "../assets/kiosk-photo.png";
 
 export default function MarketingHomePage() {
+  const { hash } = useLocation();
+
+  useEffect(() => {
+    if (hash) {
+      const el = document.querySelector(hash);
+      el?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [hash]);
+
   return (
     <div className="marketing-home">
       <section className="marketing-hero relative isolate overflow-hidden">
@@ -48,7 +58,7 @@ export default function MarketingHomePage() {
 
       <DidYouKnowPanel />
 
-      <section className="border-t border-border bg-background py-16 sm:py-20">
+      <section id="how-it-works" className="border-t border-border bg-background py-16 sm:py-20">
         <div className="mx-auto max-w-5xl px-5 sm:px-8">
           <h2 className="font-marketing text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             How it works
