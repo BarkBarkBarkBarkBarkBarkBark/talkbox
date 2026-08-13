@@ -22,7 +22,7 @@ export default function MarketingLayout({ children }) {
             <TalkBoxLogo compact className="text-white group-hover:text-primary" />
           </NavLink>
           <nav className="flex items-center gap-5 sm:gap-8" aria-label="Marketing">
-            <NavLink to={aboutTo} end className={navLinkClass}>
+            <NavLink to={`${aboutTo}#how-it-works`} className={navLinkClass}>
               About
             </NavLink>
             <NavLink to="/demo" className={navLinkClass}>
