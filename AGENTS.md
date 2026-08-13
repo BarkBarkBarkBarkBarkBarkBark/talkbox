@@ -30,7 +30,13 @@ hard-coded canonical resource lists without an explicit architecture change.
 Database migrations, admin bootstrap, imports, and seed commands must remain
 explicit operations and must never run automatically at application startup.
 
+When catching a local appliance or this checkout up to the live catalog
+(multi-category join table, Browse visibility, `/admin` bulk edit, Neon as
+canonical), follow `docs/LOCAL_AGENT_HANDOFF_CANONICAL_NEON.md`. Do not follow
+the archived Replit/SQLite handoff.
+
 Key files:
+- `docs/LOCAL_AGENT_HANDOFF_CANONICAL_NEON.md` is the current local-agent brief.
 - `app/frontend/src/main.jsx` defines the route map.
 - `app/frontend/src/pages/RootPage.jsx` chooses marketing vs kiosk on `/`.
 - `app/frontend/src/pages/KioskPage.jsx` is the production kiosk page.
