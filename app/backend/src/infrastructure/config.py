@@ -92,7 +92,10 @@ class Settings(BaseSettings):
     # Twilio calls /api/kiosk/call/twiml on this URL to get dial instructions.
     twilio_public_url: str = Field(default="", alias="TWILIO_PUBLIC_URL")
     # ─── HTTP / CORS ──────────────────────────────────────────────────
-    cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://localhost:8084",
+        alias="CORS_ORIGINS",
+    )
 
     # ─── Auth ─────────────────────────────────────────────────────────
     jwt_secret: str = Field(default="change-me-in-production", alias="JWT_SECRET")
@@ -136,6 +139,37 @@ class Settings(BaseSettings):
     # Example: +19165551234,+17075559876
     # On Twilio trial accounts, only verified numbers can be called.
     kiosk_test_call_numbers: str = Field(default="", alias="KIOSK_TEST_CALL_NUMBERS")
+
+    # ─── Kiosk device enrollment ─────────────────────────────────────
+    # Device credentials are opaque, HttpOnly browser cookies. The values below
+    # are deliberately disabled by default so a deployment must opt in.
+    kiosk_device_cookie_name: str = Field(
+        default="talkbox_kiosk_device", alias="KIOSK_DEVICE_COOKIE_NAME"
+    )
+    kiosk_device_cookie_max_age_seconds: int = Field(
+        default=60 * 60 * 24 * 365,
+        alias="KIOSK_DEVICE_COOKIE_MAX_AGE_SECONDS",
+    )
+    kiosk_device_cookie_samesite: str = Field(
+        default="lax", alias="KIOSK_DEVICE_COOKIE_SAMESITE"
+    )
+    kiosk_device_last_seen_interval_seconds: int = Field(
+        default=3600, alias="KIOSK_DEVICE_LAST_SEEN_INTERVAL_SECONDS"
+    )
+    kiosk_enrollment_code_ttl_seconds: int = Field(
+        default=900, alias="KIOSK_ENROLLMENT_CODE_TTL_SECONDS"
+    )
+    # A temporary break-glass enrollment code. Set this only as a deployment
+    # secret; leaving either setting false/empty disables reusable enrollment.
+    kiosk_reusable_enrollment_enabled: bool = Field(
+        default=False, alias="KIOSK_REUSABLE_ENROLLMENT_ENABLED"
+    )
+    kiosk_reusable_enrollment_code: str = Field(
+        default="", alias="KIOSK_REUSABLE_ENROLLMENT_CODE"
+    )
+    kiosk_call_token_min_interval_seconds: int = Field(
+        default=10, alias="KIOSK_CALL_TOKEN_MIN_INTERVAL_SECONDS"
+    )
 
     # ─── Kiosk speech-to-text ─────────────────────────────────────────
     kiosk_stt_enabled: bool = Field(default=True, alias="KIOSK_STT_ENABLED")

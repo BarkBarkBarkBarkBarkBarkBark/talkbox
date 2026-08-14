@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Search, Trash2, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api.js";
 import { Button } from "../components/ui/Button.jsx";
@@ -138,6 +138,41 @@ function LoginGate({ onLoggedIn }) {
   );
 }
 
+function KioskFleetPanel({ devices, enrollmentCode, onCreateCode, onUpdateDevice }) {
+  return (
+    <section className="mt-5 border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+        <div>
+          <h2 className="font-bold">Kiosk devices</h2>
+          <p className="text-base text-muted-foreground">Enroll tablets and revoke their calling access.</p>
+        </div>
+        <Button onClick={onCreateCode}><Plus className="mr-2 h-4 w-4" />Create enrollment code</Button>
+      </div>
+      {enrollmentCode ? <div className="border-b border-border bg-primary/5 p-4">
+        <p className="font-semibold">New code, shown once</p>
+        <code className="mt-1 block break-all rounded bg-background p-2 text-base">{enrollmentCode.code}</code>
+        <p className="mt-2 text-base text-muted-foreground">Expires {new Date(enrollmentCode.expires_at).toLocaleString()}.</p>
+      </div> : null}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-180 text-left text-base">
+          <thead className="border-b border-border bg-secondary/50 text-muted-foreground"><tr>
+            <th className="px-4 py-3 font-semibold">Code</th><th className="px-4 py-3 font-semibold">Name</th><th className="px-4 py-3 font-semibold">Location</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last seen</th><th className="w-28 px-4 py-3"><span className="sr-only">Actions</span></th>
+          </tr></thead>
+          <tbody>{devices.map((device) => <tr key={device.id} className="border-b border-border last:border-0">
+            <td className="px-4 py-3 font-semibold">{device.device_code}</td><td className="px-4 py-3">{device.display_name}</td><td className="px-4 py-3">{device.location || "-"}</td>
+            <td className="px-4 py-3">{device.revoked_at ? "Revoked" : device.enabled ? "Enabled" : "Disabled"}</td><td className="px-4 py-3">{device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}</td>
+            <td className="px-4 py-3"><div className="flex justify-end gap-1">
+              {!device.revoked_at ? <Button size="icon" variant="ghost" title="Revoke device" aria-label={`Revoke ${device.device_code}`} onClick={() => onUpdateDevice(device, { revoke: true })}><XCircle className="h-4 w-4 text-destructive" /></Button> : null}
+              {!device.revoked_at ? <Button size="sm" variant="outline" onClick={() => onUpdateDevice(device, { enabled: !device.enabled })}>{device.enabled ? "Disable" : "Enable"}</Button> : null}
+            </div></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {!devices.length ? <p className="p-6 text-center text-muted-foreground">No kiosks enrolled yet.</p> : null}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(null);
   const sessionCheckId = useRef(0);
@@ -155,6 +190,8 @@ export default function AdminPage() {
   const [bulkCategories, setBulkCategories] = useState([]);
   const [bulkCategorySearch, setBulkCategorySearch] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [enrollmentCode, setEnrollmentCode] = useState(null);
 
   async function checkSession() {
     const checkId = ++sessionCheckId.current;
@@ -181,10 +218,42 @@ export default function AdminPage() {
     }
   }
 
+  async function loadDevices() {
+    try {
+      setDevices(await api.admin.devices());
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) setAuthenticated(false);
+      else toast.error(errorMessage(error));
+    }
+  }
+
   useEffect(() => { checkSession(); }, []);
   useEffect(() => {
     if (authenticated) loadResources();
   }, [authenticated, search, category, page]);
+  useEffect(() => {
+    if (authenticated) loadDevices();
+  }, [authenticated]);
+
+  async function createEnrollmentCode() {
+    try {
+      setEnrollmentCode(await api.admin.createDeviceEnrollmentCode());
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }
+
+  async function updateDevice(device, changes) {
+    const action = changes.revoke ? "revoke" : changes.enabled ? "enable" : "disable";
+    if (changes.revoke && !window.confirm(`Revoke ${device.device_code}? It will lose calling access immediately.`)) return;
+    try {
+      await api.admin.updateDevice(device.id, changes);
+      await loadDevices();
+      toast.success(`${device.device_code} ${action}d.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }
 
   async function saveAgency(values) {
     setSaving(true);
@@ -350,6 +419,13 @@ export default function AdminPage() {
             ))}
           </section>
         ) : null}
+
+        <KioskFleetPanel
+          devices={devices}
+          enrollmentCode={enrollmentCode}
+          onCreateCode={createEnrollmentCode}
+          onUpdateDevice={updateDevice}
+        />
 
         <section className="mt-5 border border-border bg-card">
           <div className="flex flex-wrap gap-3 border-b border-border p-4">

@@ -1,12 +1,13 @@
 // Kiosk API client. Mirrors the fetch conventions in lib/api.js but targets the
-// additive /api/kiosk/* endpoints. No credentials needed (kiosk routes are open
-// when DISABLE_AUTH=true, which is the kiosk default).
+// additive /api/kiosk/* endpoints. Public resource calls remain anonymous, but
+// including credentials lets an enrolled physical kiosk use its HttpOnly cookie.
 
 const BASE_URL = import.meta.env.VITE_API_URL || "";
 
 async function request(path, opts = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...opts,
   });
   let data = null;
@@ -25,6 +26,11 @@ async function request(path, opts = {}) {
 
 export const kioskApi = {
   config: () => request("/api/kiosk/config"),
+  deviceStatus: () => request("/api/kiosk/device/status"),
+  enrollDevice: (device) => request("/api/kiosk/device/enroll", {
+    method: "POST",
+    body: JSON.stringify(device),
+  }),
 
   // Lightweight liveness probe with a hard timeout so a dead backend is
   // detected instead of hanging fetches piling up.
@@ -45,6 +51,7 @@ export const kioskApi = {
     const res = await fetch(`${BASE_URL}/api/kiosk/speech/transcribe`, {
       method: "POST",
       body: form,
+      credentials: "include",
     });
     let data = null;
     try {
@@ -70,9 +77,13 @@ export const kioskApi = {
 
   // Request a Twilio Voice access token for browser SDK calling.
   // Backend validates the allowlist before issuing the token.
-  requestVoiceToken: ({ phone, name }) =>
+  requestVoiceToken: ({ phone, name, demo = false }) =>
     request("/api/kiosk/call/token", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-TalkBox-Mode": demo ? "demo" : "kiosk",
+      },
       body: JSON.stringify({ phone, name }),
     }),
 
@@ -82,6 +93,7 @@ export const kioskApi = {
       fetch(`${BASE_URL}/api/kiosk/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+          credentials: "include",
         body: JSON.stringify(event),
         keepalive: true,
       }).catch(() => {});

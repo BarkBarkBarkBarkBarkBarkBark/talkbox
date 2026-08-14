@@ -4,7 +4,7 @@ import { kioskApi } from "../lib/kioskApi.js";
 
 // Call status vocabulary (matches CALL_STATUS dispatches in state machine):
 //   idle | requesting | connecting | ringing | in-progress | ended | failed
-export function useKioskVoiceCall({ onStatus }) {
+export function useKioskVoiceCall({ onStatus, demo = false }) {
   const deviceRef = useRef(null);
   const callRef = useRef(null);
   const [status, setStatus] = useState("idle");
@@ -36,11 +36,11 @@ export function useKioskVoiceCall({ onStatus }) {
       updateStatus("requesting");
       let tokenData;
       try {
-        tokenData = await kioskApi.requestVoiceToken({ phone, name });
+        tokenData = await kioskApi.requestVoiceToken({ phone, name, demo });
       } catch (err) {
         const reason =
           err.status === 403
-            ? "This number is not on the approved call list."
+            ? "Phone calling is available on TalkBox kiosks."
             : err.status === 503
               ? "Browser calling is not configured on this device."
               : "The call could not be placed.";
@@ -116,7 +116,7 @@ export function useKioskVoiceCall({ onStatus }) {
         teardown();
       });
     },
-    [teardown, updateStatus],
+    [demo, teardown, updateStatus],
   );
 
   // Send DTMF tones to the far end (IVR menus, extensions, etc).

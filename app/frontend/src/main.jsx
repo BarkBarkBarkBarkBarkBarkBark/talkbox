@@ -11,6 +11,7 @@ import ChatPage from "./pages/ChatPage.jsx";
 import DemoKioskPage from "./pages/DemoKioskPage.jsx";
 import DonatePage from "./pages/DonatePage.jsx";
 import KioskPage from "./pages/KioskPage.jsx";
+import KioskEnrollmentPage from "./pages/KioskEnrollmentPage.jsx";
 import MarketingSitePage from "./pages/MarketingSitePage.jsx";
 import RootPage from "./pages/RootPage.jsx";
 import "./index.css";
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           </Route>
           {/* Hardware-stable production kiosk (Pi Chromium default). */}
           <Route path="/kiosk" element={<KioskPage />} />
+          <Route path="/kiosk/enroll" element={<KioskEnrollmentPage />} />
           {/* Simulated kiosk + thin marketing chrome; calls are never real. */}
           <Route path="/demo" element={<DemoKioskPage />} />
           {/* Secondary, superuser-only resource operations console. */}

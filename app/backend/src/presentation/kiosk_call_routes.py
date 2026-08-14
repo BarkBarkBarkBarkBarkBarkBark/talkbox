@@ -11,7 +11,7 @@ import time
 import uuid
 from urllib.parse import urljoin
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import VoiceResponse
@@ -24,6 +24,7 @@ from src.application.services.kiosk_call_service import (
 )
 from src.infrastructure.config import settings
 from src.infrastructure.voice.twilio_voice_service import TwilioVoiceService
+from src.presentation.kiosk_device_auth import KioskDevice, require_kiosk_device
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ kiosk_call_service = KioskCallService(_voice_service)
 
 _IDENTITY_TOKEN_TTL_SECONDS = 90
 _PENDING_CALLS: dict[str, dict] = {}
+_LAST_TOKEN_REQUEST: dict[str, float] = {}
 
 
 class KioskCallRequest(BaseModel):
@@ -126,12 +128,13 @@ def _prune_pending_calls(now: int | None = None) -> None:
         _PENDING_CALLS.pop(identity, None)
 
 
-def _store_pending_call(to_number: str, agency: str) -> str:
+def _store_pending_call(to_number: str, agency: str, device: KioskDevice) -> str:
     _prune_pending_calls()
     identity = str(uuid.uuid4())
     _PENDING_CALLS[identity] = {
         "to": to_number,
         "agency": agency,
+        "device_code": device.device_code,
         "exp": int(time.time()) + _IDENTITY_TOKEN_TTL_SECONDS,
     }
     return identity
@@ -149,14 +152,37 @@ def _resolve_pending_call(identity: str) -> dict | None:
 
 
 @router.post("/call/start", response_model=KioskCallResponse)
-def kiosk_call_start(payload: KioskCallRequest) -> KioskCallResponse:
-    logger.info("kiosk call request: phone=%r name=%r", payload.phone, payload.name)
+def kiosk_call_start(
+    payload: KioskCallRequest,
+    request: Request,
+    device: KioskDevice = Depends(require_kiosk_device),
+) -> KioskCallResponse:
+    if request.headers.get("X-TalkBox-Mode") == "demo":
+        logger.warning("kiosk call refused: device=%s reason=demo_mode", device.device_code)
+        raise HTTPException(status_code=403, detail="Demo kiosks cannot place phone calls.")
+    logger.info("kiosk call request: device=%s", device.device_code)
     result = kiosk_call_service.start_call(payload.phone)
     return KioskCallResponse(**result)
 
 
 @router.post("/call/token", response_model=KioskVoiceTokenResponse)
-def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse:
+def kiosk_call_token(
+    payload: KioskVoiceTokenRequest,
+    request: Request,
+    device: KioskDevice = Depends(require_kiosk_device),
+) -> KioskVoiceTokenResponse:
+    if request.headers.get("X-TalkBox-Mode") == "demo":
+        logger.warning("voice token refused: device=%s reason=demo_mode", device.device_code)
+        raise HTTPException(status_code=403, detail="Demo kiosks cannot place phone calls.")
+    now = time.monotonic()
+    last_request = _LAST_TOKEN_REQUEST.get(device.device_code)
+    if (
+        last_request is not None
+        and now - last_request < settings.kiosk_call_token_min_interval_seconds
+    ):
+        logger.warning("voice token refused: device=%s reason=rate_limited", device.device_code)
+        raise HTTPException(status_code=429, detail="Please wait before starting another call.")
+
     if not _voice_service.browser_calling_configured:
         raise HTTPException(
             status_code=503,
@@ -174,44 +200,52 @@ def kiosk_call_token(payload: KioskVoiceTokenRequest) -> KioskVoiceTokenResponse
 
     agency = kiosk_call_service.find_allowlisted_agency(digits)
     if agency is None:
+        logger.warning(
+            "voice token refused: device=%s reason=destination_not_allowlisted",
+            device.device_code,
+        )
         raise HTTPException(status_code=403, detail="Number not on approved call list.")
 
-    identity = _store_pending_call(e164, agency)
+    identity = _store_pending_call(e164, agency, device)
     route = _encode_identity(
         e164,
         agency,
         int(time.time()) + _IDENTITY_TOKEN_TTL_SECONDS,
     )
     token = _voice_service.generate_access_token(identity=identity)
+    _LAST_TOKEN_REQUEST[device.device_code] = now
     logger.info(
-        "voice token issued: identity=%s agency=%s to=%s",
+        "voice token issued: device=%s identity=%s agency=%s",
+        device.device_code,
         identity,
         agency,
-        e164,
     )
     return KioskVoiceTokenResponse(token=token, identity=identity, route=route, agency=agency)
 
 
-def _twilio_signature_valid(request: Request, form: dict) -> bool:
+def _twilio_webhook_url(path: str) -> str:
+    public_url = settings.twilio_public_url.rstrip("/")
+    if "/api/kiosk/call/" in public_url:
+        return public_url.rsplit("/api/kiosk/call/", 1)[0] + path
+    return urljoin(public_url + "/", path.lstrip("/"))
+
+
+def _twilio_signature_valid(request: Request, form: dict, path: str) -> bool:
     if not settings.twilio_auth_token or not settings.twilio_public_url:
-        logger.warning("twiml webhook: missing Twilio signing configuration")
+        logger.warning("Twilio webhook: missing signing configuration")
         return False
 
-    public_url = settings.twilio_public_url.rstrip("/")
-    url = (
-        public_url
-        if public_url.endswith("/api/kiosk/call/twiml")
-        else urljoin(public_url + "/", "api/kiosk/call/twiml")
-    )
     signature = request.headers.get("X-Twilio-Signature", "")
-    return RequestValidator(settings.twilio_auth_token).validate(url, form, signature)
+    return RequestValidator(settings.twilio_auth_token).validate(
+        _twilio_webhook_url(path), form, signature
+    )
 
 
 @router.post("/call/twiml")
 async def kiosk_call_twiml(request: Request) -> Response:
     form = await request.form()
 
-    if not _twilio_signature_valid(request, dict(form)):
+    if not _twilio_signature_valid(request, dict(form), "/api/kiosk/call/twiml"):
         logger.warning("twiml webhook: invalid Twilio signature — refusing")
         return Response(status_code=403)
     # Twilio normally posts the browser identity in the `From` form field as
@@ -228,7 +262,11 @@ async def kiosk_call_twiml(request: Request) -> Response:
         return Response(content=str(vr), media_type="application/xml")
 
     to_number = pending["to"]
-    logger.info("twiml webhook: connecting identity=%s to=%s", identity_key, to_number)
+    logger.info(
+        "twiml webhook: device=%s connecting identity=%s",
+        pending.get("device_code", "unknown"),
+        identity_key,
+    )
     twiml = _voice_service.build_dial_twiml(to_number)
     return Response(content=twiml, media_type="application/xml")
 
@@ -236,15 +274,16 @@ async def kiosk_call_twiml(request: Request) -> Response:
 @router.post("/call/status")
 async def kiosk_call_status(request: Request) -> dict:
     form = await request.form()
+    if not _twilio_signature_valid(request, dict(form), "/api/kiosk/call/status"):
+        logger.warning("status webhook: invalid Twilio signature — refusing")
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature.")
     sid = form.get("CallSid", "")
     status = form.get("CallStatus", "")
-    to = form.get("To", "")
     duration = form.get("CallDuration", "")
     logger.info(
-        "twilio status callback: sid=%s status=%s to=%s duration=%ss",
+        "twilio status callback: sid=%s status=%s duration=%ss",
         sid,
         status,
-        to,
         duration,
     )
     return {"received": True}

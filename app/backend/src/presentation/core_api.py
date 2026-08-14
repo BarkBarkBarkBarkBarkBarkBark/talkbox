@@ -7,6 +7,7 @@ from src.presentation.auth import auth_backend, fastapi_users
 from src.presentation.admin_routes import router as admin_router
 from src.presentation.kiosk_call_routes import router as kiosk_call_router
 from src.presentation.kiosk_core_routes import router as kiosk_router
+from src.presentation.kiosk_device_routes import router as kiosk_device_router
 from src.presentation.middleware import configure_cors
 from src.presentation.query_routes import router as query_router
 from src.presentation.resource_routes import router as resource_router
@@ -54,6 +55,7 @@ def create_core_app() -> FastAPI:
     app.include_router(resource_router)
     app.include_router(query_router, prefix="/api")
     app.include_router(kiosk_router, prefix="/api")
+    app.include_router(kiosk_device_router, prefix="/api")
     app.include_router(kiosk_call_router, prefix="/api")
     app.include_router(sms_router, prefix="/api")
     app.include_router(admin_router, prefix="/api/admin")

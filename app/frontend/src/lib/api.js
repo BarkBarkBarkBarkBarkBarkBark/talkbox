@@ -47,6 +47,17 @@ export const api = {
       return request(`/api/admin/agencies?${params}`);
     },
     categories: () => request("/api/admin/categories"),
+    devices: () => request("/api/admin/devices"),
+    createDeviceEnrollmentCode: (details = {}) => request("/api/admin/devices/enrollment-codes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(details),
+    }),
+    updateDevice: (id, changes) => request(`/api/admin/devices/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    }),
     createAgency: (agency) => request("/api/admin/agencies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -5,18 +5,24 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
+import secrets
+import uuid
 from datetime import datetime
+from datetime import timedelta, timezone
 
 import openpyxl
 import psycopg
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from psycopg.rows import dict_row
 
 from src.infrastructure.config import settings
 from src.infrastructure.db import to_sync_dsn
 from src.infrastructure.persistence.database import User
 from src.presentation.auth import current_superuser
+from src.presentation.kiosk_device_auth import hash_secret
 from src.presentation.schemas import (
     AdminAgencyPage,
     AdminAgencyRead,
@@ -27,6 +33,7 @@ from src.presentation.schemas import (
     AdminImportRow,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["admin"])
 
 CANONICAL_COLUMNS = (
@@ -64,6 +71,117 @@ HEADER_ALIASES = {
     "visible": "show_on_kiosk",
 }
 
+
+class AdminKioskDeviceRead(BaseModel):
+    id: uuid.UUID
+    device_code: str
+    display_name: str
+    location: str | None = None
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    last_seen_at: datetime | None = None
+    revoked_at: datetime | None = None
+
+
+class AdminDeviceEnrollmentCodeCreate(BaseModel):
+    device_code: str | None = Field(default=None, max_length=32)
+    display_name: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    label: str | None = Field(default=None, max_length=255)
+    expires_in_seconds: int | None = Field(default=None, ge=60, le=86400)
+
+
+class AdminDeviceEnrollmentCodeRead(BaseModel):
+    code: str
+    expires_at: datetime
+
+
+class AdminKioskDeviceUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    enabled: bool | None = None
+    revoke: bool = False
+
+
+@router.get("/devices", response_model=list[AdminKioskDeviceRead])
+def list_kiosk_devices(_: User = Depends(current_superuser)) -> list[AdminKioskDeviceRead]:
+    with _connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT id, device_code, display_name, location, enabled,
+                      created_at, updated_at, last_seen_at, revoked_at
+               FROM kiosk_devices
+               ORDER BY device_code"""
+        )
+        return cur.fetchall()
+
+
+@router.post(
+    "/devices/enrollment-codes",
+    response_model=AdminDeviceEnrollmentCodeRead,
+    status_code=201,
+)
+def create_device_enrollment_code(
+    payload: AdminDeviceEnrollmentCodeCreate,
+    user: User = Depends(current_superuser),
+) -> AdminDeviceEnrollmentCodeRead:
+    code = secrets.token_urlsafe(24)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        seconds=payload.expires_in_seconds or settings.kiosk_enrollment_code_ttl_seconds
+    )
+    with _connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO kiosk_enrollment_codes
+                   (id, code_hash, device_code, display_name, location, label, created_by, expires_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (
+                uuid.uuid4(),
+                hash_secret(code),
+                payload.device_code.strip().upper() if payload.device_code else None,
+                payload.display_name,
+                payload.location,
+                payload.label,
+                str(user.id),
+                expires_at,
+            ),
+        )
+        conn.commit()
+    return AdminDeviceEnrollmentCodeRead(code=code, expires_at=expires_at)
+
+
+@router.patch("/devices/{device_id}", response_model=AdminKioskDeviceRead)
+def update_kiosk_device(
+    device_id: uuid.UUID,
+    payload: AdminKioskDeviceUpdate,
+    _: User = Depends(current_superuser),
+) -> AdminKioskDeviceRead:
+    with _connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """UPDATE kiosk_devices
+               SET display_name = COALESCE(%s, display_name),
+                   location = COALESCE(%s, location),
+                   enabled = CASE WHEN %s THEN false ELSE COALESCE(%s, enabled) END,
+                   revoked_at = CASE WHEN %s THEN NOW() ELSE revoked_at END,
+                   updated_at = NOW()
+               WHERE id = %s
+               RETURNING id, device_code, display_name, location, enabled,
+                         created_at, updated_at, last_seen_at, revoked_at""",
+            (
+                payload.display_name,
+                payload.location,
+                payload.revoke,
+                payload.enabled,
+                payload.revoke,
+                device_id,
+            ),
+        )
+        device = cur.fetchone()
+        if not device:
+            raise HTTPException(status_code=404, detail="Kiosk device not found.")
+        conn.commit()
+    if payload.revoke:
+        logger.info("kiosk device revoked: device=%s", device["device_code"])
+    return device
 
 def _connection():
     if not settings.db_uri:

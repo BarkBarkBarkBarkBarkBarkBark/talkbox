@@ -208,6 +208,43 @@ number that is not:
 `/demo` never places real calls. The microphone must be allowed —
 nginx ships `Permissions-Policy: microphone=(self)` for this.
 
+### Physical kiosk enrollment
+
+The public `/kiosk` route intentionally allows resource search, Browse, voice
+search, and 211 information without a login. Telephone privileges are separate:
+only an enrolled, enabled physical TalkBox receives a short-lived Twilio Voice
+token. Each enrolled browser holds an opaque `HttpOnly`, `Secure` device cookie;
+Neon stores only a slow hash and an individual device can be disabled or revoked
+from `/admin` without affecting the rest of the fleet.
+
+1. Sign into `/admin` and create a one-time enrollment code in **Kiosk devices**.
+2. On the prepared tablet, open `/kiosk/enroll`, enter that code, and choose a
+  label/location (or the assigned `TB-xxx` code).
+3. Confirm the tablet returns to `/kiosk`, then verify it appears in `/admin`.
+4. Disable or revoke the device from `/admin` to immediately prevent future
+  call-token requests.
+
+Run `cd app/backend && python main.py migrate` explicitly before deploying this
+feature. Migrations never run automatically at application startup.
+
+For temporary development provisioning only, set these values in an ignored
+local backend environment file or as Fly secrets, then remove or rotate them
+when finished:
+
+```bash
+KIOSK_REUSABLE_ENROLLMENT_ENABLED=true
+KIOSK_REUSABLE_ENROLLMENT_CODE=<development-only code>
+```
+
+The reusable value is a global enrollment secret, not a device credential. Every
+successful use still creates a distinct revocable `TB-xxx` device. Do not place
+it in Vercel variables, frontend source, `.env.example`, or committed Fly config.
+
+Production Fly configuration must set `CORS_ORIGINS` to the canonical TalkBox
+origins (currently `https://talk-box.org,https://www.talk-box.org`) and keep
+`DB_URI`, all Twilio values, `JWT_SECRET`, and any reusable enrollment value as
+Fly secrets. Vercel receives no database or Twilio secret.
+
 One-time Twilio setup: create a TwiML App (Console → Voice → TwiML Apps),
 put its SID in `TWILIO_TWIML_APP_SID`, and set `TWILIO_PUBLIC_URL` in `.env`
 to your stable public host URL.

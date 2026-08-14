@@ -248,6 +248,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
 
   // ─── Voice SDK hook (real two-way calls) ─────────────────────────────
   const voiceCall = useKioskVoiceCall({
+    demo: fakeCall,
     onStatus: useCallback((sdkStatus, reason) => {
       // Map SDK status vocabulary → state machine CALL_STATUS dispatch
       const map = {
@@ -276,10 +277,17 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
   // ─── Config ──────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
-    kioskApi
-      .config()
-      .then((cfg) => {
-        if (alive) dispatch({ type: "CONFIG_LOADED", config: cfg });
+    Promise.all([kioskApi.config(), kioskApi.deviceStatus()])
+      .then(([cfg, device]) => {
+        if (alive) {
+          dispatch({
+            type: "CONFIG_LOADED",
+            config: {
+              ...cfg,
+              calling_enabled: Boolean(cfg.calling_enabled && device.calling_enabled),
+            },
+          });
+        }
       })
       .catch(() => {
         // Config is best-effort; a default menu still works offline.
@@ -458,11 +466,20 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
       const target = item || stateRef.current.selected;
       if (!target) return;
       const callingDisabled = stateRef.current.config?.calling_enabled === false;
-      const simulated = fakeCall || callingDisabled || !target.phone;
+      const simulated = fakeCall || !target.phone;
       kioskApi.logEvent({
         event_type: "call_start",
         payload: { name: target.name, simulated },
       });
+      if (callingDisabled && !fakeCall) {
+        dispatch({
+          type: "CALL_STATUS",
+          status: "failed",
+          simulated: false,
+          reason: "Phone calling is available on TalkBox kiosks.",
+        });
+        return;
+      }
       dispatch({ type: "CALL_STATUS", status: "connecting", simulated });
       announce(`Calling ${target.name}.`);
       if (callTimer.current) clearTimeout(callTimer.current);
