@@ -8,7 +8,7 @@ export default function GalleryPage() {
           Hardware
         </p>
         <h1 className="mt-3 font-marketing text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          Gallery
+          Get a Talk Box
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
           The TalkBox in service today, and the next unit waiting for a home.

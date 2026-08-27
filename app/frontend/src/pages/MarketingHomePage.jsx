@@ -120,7 +120,7 @@ export default function MarketingHomePage() {
               to="/gallery"
               className="font-semibold text-primary underline-offset-4 hover:underline"
             >
-              See the kiosks
+              Get a Talk Box
             </Link>
             {" — "}the unit in the field, and the next one you can place.
           </p>

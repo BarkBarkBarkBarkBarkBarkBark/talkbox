@@ -5,7 +5,7 @@ import TalkBoxLogo from "./TalkBoxLogo.jsx";
 
 const navLinkClass = ({ isActive }) =>
   cn(
-    "shrink-0 text-xs font-semibold tracking-wide transition-colors duration-200 sm:text-sm",
+    "shrink-0 whitespace-nowrap text-xs font-semibold tracking-wide transition-colors duration-200 sm:text-sm",
     isActive ? "text-primary" : "text-foreground/70 hover:text-foreground",
   );
 
@@ -29,7 +29,7 @@ export default function MarketingLayout({ children }) {
               Demo
             </NavLink>
             <NavLink to="/gallery" className={navLinkClass}>
-              Gallery
+              Get a Talk Box
             </NavLink>
             <NavLink to="/donate" className={navLinkClass}>
               Donate
