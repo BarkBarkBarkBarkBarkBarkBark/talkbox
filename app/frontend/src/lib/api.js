@@ -1,7 +1,20 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+const CONFIGURED_API = import.meta.env.VITE_API_URL || "";
+
+// talk-box.org already rewrites /api → Fly. Calling talkbox.fly.dev from the
+// browser makes the auth cookie third-party, so Chrome keeps you logged in
+// for one request then 401s ("Not Found" / kick back to login).
+function apiBase() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "talk-box.org" || host === "www.talk-box.org" || host.endsWith(".vercel.app")) {
+      return "";
+    }
+  }
+  return CONFIGURED_API;
+}
 
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     credentials: "include",
     ...opts,
   });
@@ -40,6 +53,8 @@ export const api = {
       body: new URLSearchParams({ username: email, password }),
     }),
     logout: () => request("/api/auth/jwt/logout", { method: "POST" }),
+    kiosks: () => request("/api/admin/kiosks"),
+    pushToKiosks: () => request("/api/admin/kiosks/push", { method: "POST" }),
     agencies: ({ search = "", category = "", page = 1 } = {}) => {
       const params = new URLSearchParams({ page: String(page) });
       if (search) params.set("search", search);
@@ -83,7 +98,7 @@ export const api = {
     publishImport: (id) => request(`/api/admin/imports/${id}/publish`, { method: "POST" }),
     discardImport: (id) => request(`/api/admin/imports/${id}/discard`, { method: "POST" }),
     exportAgencies: async () => {
-      const response = await fetch(`${BASE_URL}/api/admin/agencies/export`, {
+      const response = await fetch(`${apiBase()}/api/admin/agencies/export`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`);

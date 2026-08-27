@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from src.application.services.kiosk_query_service import KioskQueryService
 from src.application.services.kiosk_stt_service import KioskSttError, KioskSttService
+from src.application.services.catalog_pull_service import catalog_pull_service
+from src.infrastructure import catalog_sync
 from src.infrastructure.config import settings
 from src.presentation.query_runtime import get_query_handler
 
@@ -197,3 +199,34 @@ def kiosk_events(event: KioskEventRequest) -> dict:
         event.payload,
     )
     return {"accepted": True}
+
+
+@router.get("/catalog/version")
+def catalog_version() -> dict:
+    return catalog_sync.load_version()
+
+
+@router.get("/catalog")
+def catalog_snapshot() -> dict:
+    return catalog_sync.load_snapshot()
+
+
+@router.get("/catalog/status")
+def catalog_pull_status() -> dict:
+    local = catalog_sync.load_version()
+    return {**catalog_pull_service.status(), **local}
+
+
+@router.post("/catalog/pull")
+async def catalog_pull(force: bool = False) -> dict:
+    if not catalog_pull_service.configured:
+        raise HTTPException(
+            status_code=400,
+            detail="This node has no TALKBOX_CENTRAL_API_BASE_URL; nothing to pull.",
+        )
+    try:
+        return await catalog_pull_service.pull_if_needed(force=force)
+    except Exception as exc:
+        logger.exception("manual catalog pull failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+

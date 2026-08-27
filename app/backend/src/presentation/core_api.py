@@ -38,9 +38,16 @@ async def lifespan(app: FastAPI):
             logger.exception("resource synchronization failed at startup")
     else:
         logger.info("FSC resource synchronization disabled")
+    from src.application.services.catalog_pull_service import catalog_pull_service
+
+    try:
+        await catalog_pull_service.start()
+    except Exception:
+        logger.exception("catalog pull failed at startup")
     try:
         yield
     finally:
+        await catalog_pull_service.stop()
         await resource_sync_service.stop()
 
 

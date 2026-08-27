@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Search, Trash2, Upload, XCircle } from "lucide-react";
+import { Download, Eye, EyeOff, LogOut, Pencil, Plus, Radio, Search, Trash2, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api.js";
 import { Button } from "../components/ui/Button.jsx";
@@ -16,7 +16,10 @@ const EMPTY_AGENCY = {
 };
 
 function errorMessage(error) {
-  return error?.message || "Something went wrong. Please try again.";
+  const detail = error?.data?.detail ?? error?.message;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail.map((item) => item.msg).join(" ");
+  return "Something went wrong. Please try again.";
 }
 
 function AgencyForm({ agency, categories, onCancel, onSave, saving }) {
@@ -112,6 +115,7 @@ function LoginGate({ onLoggedIn }) {
     setPending(true);
     try {
       await api.admin.login(email, password);
+      await api.admin.currentUser();
       await onLoggedIn();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -192,6 +196,7 @@ export default function AdminPage() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [devices, setDevices] = useState([]);
   const [enrollmentCode, setEnrollmentCode] = useState(null);
+  const [pushing, setPushing] = useState(false);
 
   async function checkSession() {
     const checkId = ++sessionCheckId.current;
@@ -332,6 +337,20 @@ export default function AdminPage() {
     }
   }
 
+  async function pushToKiosks() {
+    setPushing(true);
+    try {
+      const result = await api.admin.pushToKiosks();
+      toast.success(
+        `Pushed catalog v${result.content_version} to kiosks (${result.visible_count} in Browse, ${result.agency_count} total).`
+      );
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setPushing(false);
+    }
+  }
+
   async function logout() {
     try {
       await api.admin.logout();
@@ -392,6 +411,9 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={downloadExport}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+            <Button variant="outline" onClick={pushToKiosks} disabled={pushing}>
+              <Radio className="mr-2 h-4 w-4" />{pushing ? "Pushing..." : "Push to kiosks"}
+            </Button>
             <label className="inline-flex h-10 cursor-pointer items-center rounded-md bg-primary px-4 text-base font-semibold text-primary-foreground hover:bg-primary/90">
               <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Preview import"}
               <input className="sr-only" type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={uploading} />

@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     talkbox_snapshot_publish_keys: str = Field(
         default="", alias="TALKBOX_SNAPSHOT_PUBLISH_KEYS"
     )
+    talkbox_catalog_pull_interval_seconds: int = Field(
+        default=15, alias="TALKBOX_CATALOG_PULL_INTERVAL_SECONDS"
+    )
 
     # ─── Observability ────────────────────────────────────────────────
     log_file: str = Field(default="app.log", alias="LOG_FILE")

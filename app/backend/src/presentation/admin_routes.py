@@ -21,6 +21,7 @@ from psycopg.rows import dict_row
 from src.infrastructure.config import settings
 from src.infrastructure.db import to_sync_dsn
 from src.infrastructure.persistence.database import User
+from src.infrastructure import catalog_sync
 from src.presentation.auth import current_superuser
 from src.presentation.kiosk_device_auth import hash_secret
 from src.presentation.schemas import (
@@ -524,3 +525,20 @@ def publish_import(batch_id: int, _: User = Depends(current_superuser)) -> Admin
         result = cur.fetchone()
         conn.commit()
         return result
+
+
+@router.get("/kiosks")
+def kiosk_push_status(_: User = Depends(current_superuser)) -> dict:
+    snapshot = catalog_sync.load_snapshot()
+    return {
+        "content_version": snapshot["content_version"],
+        "updated_at": snapshot["updated_at"],
+        "pushed_at": snapshot["pushed_at"],
+        "agency_count": snapshot["agency_count"],
+        "visible_count": snapshot["visible_count"],
+    }
+
+
+@router.post("/kiosks/push")
+def push_to_kiosks(_: User = Depends(current_superuser)) -> dict:
+    return catalog_sync.push_catalog()
