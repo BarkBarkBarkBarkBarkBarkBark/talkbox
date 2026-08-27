@@ -5,7 +5,7 @@ import TalkBoxLogo from "./TalkBoxLogo.jsx";
 
 const navLinkClass = ({ isActive }) =>
   cn(
-    "text-sm font-semibold tracking-wide transition-colors duration-200",
+    "shrink-0 text-xs font-semibold tracking-wide transition-colors duration-200 sm:text-sm",
     isActive ? "text-primary" : "text-foreground/70 hover:text-foreground",
   );
 
@@ -17,16 +17,19 @@ export default function MarketingLayout({ children }) {
   return (
     <div className="marketing-shell flex min-h-full flex-col">
       <header className="marketing-header sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-5 sm:px-8">
-          <NavLink to={aboutTo} className="group flex items-baseline gap-2 no-underline">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:gap-4 sm:px-8">
+          <NavLink to={aboutTo} className="group flex shrink-0 items-baseline gap-2 no-underline">
             <TalkBoxLogo compact className="text-white group-hover:text-primary" />
           </NavLink>
-          <nav className="flex items-center gap-5 sm:gap-8" aria-label="Marketing">
+          <nav className="flex items-center gap-2.5 overflow-x-auto text-xs sm:gap-7 sm:text-sm" aria-label="Marketing">
             <NavLink to={`${aboutTo}#how-it-works`} className={navLinkClass}>
               About
             </NavLink>
             <NavLink to="/demo" className={navLinkClass}>
               Demo
+            </NavLink>
+            <NavLink to="/gallery" className={navLinkClass}>
+              Gallery
             </NavLink>
             <NavLink to="/donate" className={navLinkClass}>
               Donate

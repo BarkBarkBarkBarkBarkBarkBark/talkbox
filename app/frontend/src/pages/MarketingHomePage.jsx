@@ -115,6 +115,15 @@ export default function MarketingHomePage() {
               <Link to="/donate">Support the work</Link>
             </Button>
           </div>
+          <p className="mt-8 text-base text-muted-foreground">
+            <Link
+              to="/gallery"
+              className="font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              See the kiosks
+            </Link>
+            {" — "}the unit in the field, and the next one you can place.
+          </p>
         </div>
       </section>
     </div>

@@ -10,6 +10,7 @@ import AdminPage from "./pages/AdminPage.jsx";
 import ChatPage from "./pages/ChatPage.jsx";
 import DemoKioskPage from "./pages/DemoKioskPage.jsx";
 import DonatePage from "./pages/DonatePage.jsx";
+import GalleryPage from "./pages/GalleryPage.jsx";
 import KioskPage from "./pages/KioskPage.jsx";
 import KioskEnrollmentPage from "./pages/KioskEnrollmentPage.jsx";
 import MarketingSitePage from "./pages/MarketingSitePage.jsx";
@@ -27,6 +28,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           {/* Local preview of the public site while `/` stays kiosk on localhost. */}
           <Route element={<MarketingLayout />}>
             <Route path="/site" element={<MarketingSitePage />} />
+            <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/donate" element={<DonatePage />} />
           </Route>
           {/* Hardware-stable production kiosk (Pi Chromium default). */}

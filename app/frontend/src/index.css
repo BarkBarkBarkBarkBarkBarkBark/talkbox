@@ -235,6 +235,12 @@ body {
   line-height: 1;
 }
 
+@media (max-width: 480px) {
+  .talkbox-logo--compact {
+    font-size: 1rem;
+  }
+}
+
 .talkbox-logo--hero {
   gap: 0.17em;
   color: transparent;
@@ -457,4 +463,62 @@ body {
   .dyk-panel {
     animation: none;
   }
+}
+
+/* ───── Kiosk gallery ───── */
+
+.kiosk-gallery {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .kiosk-gallery {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.kiosk-gallery-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-gallery-card__figure {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.kiosk-gallery-card__figure--live {
+  background: hsl(0 0% 6%);
+}
+
+.kiosk-gallery-card__figure--v2 {
+  background: hsl(0 0% 96%);
+}
+
+.kiosk-gallery-card__image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.kiosk-gallery-badge {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: hsl(var(--warning));
+  color: hsl(var(--warning-foreground));
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow: 0 0.35rem 0.85rem hsl(218 49% 7% / 0.28);
 }
