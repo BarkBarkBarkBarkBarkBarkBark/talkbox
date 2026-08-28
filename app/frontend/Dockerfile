@@ -11,7 +11,7 @@ COPY . .
 
 ARG VITE_API_URL=""
 ARG VITE_APP_NAME="Talk Box"
-ARG VITE_DONATE_URL="https://gofund.me/b43bc3451"
+ARG VITE_DONATE_URL="https://www.gofundme.com/f/help-someone-without-a-phone-find-their-way-into-shelter"
 ARG VITE_DONATE_LABEL="Donate now"
 ENV VITE_API_URL=$VITE_API_URL \
     VITE_APP_NAME=$VITE_APP_NAME \

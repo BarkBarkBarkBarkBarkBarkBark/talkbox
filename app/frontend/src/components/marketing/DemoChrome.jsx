@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, Heart } from "lucide-react";
+import { DONATE_LINK_PROPS } from "../../lib/donate.js";
 import { isLocalHost } from "../../lib/isLocalHost.js";
 import { Button } from "../ui/Button.jsx";
 
@@ -28,10 +29,10 @@ export default function DemoChrome({ children }) {
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="shrink-0 gap-1.5">
-          <Link to="/donate">
+          <a {...DONATE_LINK_PROPS}>
             <Heart className="h-4 w-4" aria-hidden />
             Donate
-          </Link>
+          </a>
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

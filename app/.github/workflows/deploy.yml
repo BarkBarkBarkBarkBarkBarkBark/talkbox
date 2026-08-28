@@ -45,7 +45,7 @@ jobs:
             build_args: |
               VITE_API_URL=${{ vars.VITE_API_URL }}
               VITE_APP_NAME=${{ vars.VITE_APP_NAME }}
-              VITE_DONATE_URL=${{ vars.VITE_DONATE_URL || 'https://gofund.me/b43bc3451' }}
+              VITE_DONATE_URL=${{ vars.VITE_DONATE_URL || 'https://www.gofundme.com/f/help-someone-without-a-phone-find-their-way-into-shelter' }}
               VITE_DONATE_LABEL=${{ vars.VITE_DONATE_LABEL }}
               VITE_DISABLE_AUTH=${{ vars.VITE_DISABLE_AUTH }}
     steps:

@@ -3,6 +3,13 @@
   "installCommand": "echo 'install handled by buildCommand'",
   "buildCommand": "cd frontend && npm ci && npm run build && cd .. && rm -rf frontend/node_modules",
   "outputDirectory": "frontend/dist",
+  "redirects": [
+    {
+      "source": "/donate",
+      "destination": "https://www.gofundme.com/f/help-someone-without-a-phone-find-their-way-into-shelter",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -14,3 +21,4 @@
     }
   ]
 }
+

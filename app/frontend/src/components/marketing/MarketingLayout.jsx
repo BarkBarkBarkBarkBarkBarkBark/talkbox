@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { DONATE_LINK_PROPS } from "../../lib/donate.js";
 import { isLocalHost } from "../../lib/isLocalHost.js";
 import { cn } from "../../lib/utils.js";
 import TalkBoxLogo from "./TalkBoxLogo.jsx";
@@ -31,9 +32,9 @@ export default function MarketingLayout({ children }) {
             <NavLink to="/gallery" className={navLinkClass}>
               Get a Talk Box
             </NavLink>
-            <NavLink to="/donate" className={navLinkClass}>
+            <a {...DONATE_LINK_PROPS} className={navLinkClass({ isActive: false })}>
               Donate
-            </NavLink>
+            </a>
           </nav>
         </div>
       </header>

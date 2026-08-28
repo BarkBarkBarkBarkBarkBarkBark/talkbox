@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { DONATE_LINK_PROPS } from "../../lib/donate.js";
 import { Button } from "../ui/Button.jsx";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/Card.jsx";
 import kioskPhoto from "../../assets/kiosk-photo.png";
@@ -60,7 +60,7 @@ function AdoptCard({ showCta = true }) {
       {showCta ? (
         <CardFooter>
           <Button asChild size="lg">
-            <Link to="/donate#adopt">Adopt this kiosk</Link>
+            <a {...DONATE_LINK_PROPS}>Adopt this kiosk</a>
           </Button>
         </CardFooter>
       ) : null}

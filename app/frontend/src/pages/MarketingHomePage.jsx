@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Phone, MapPin, Shield } from "lucide-react";
+import { DONATE_LINK_PROPS } from "../lib/donate.js";
 import TalkBoxLogo from "../components/marketing/TalkBoxLogo.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import DidYouKnowPanel from "../components/marketing/DidYouKnowPanel.jsx";
@@ -42,7 +43,7 @@ export default function MarketingHomePage() {
                 variant="outline"
                 className="min-w-[9.5rem] border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
               >
-                <Link to="/donate">Donate</Link>
+                <a {...DONATE_LINK_PROPS}>Donate</a>
               </Button>
             </div>
           </div>
@@ -112,7 +113,7 @@ export default function MarketingHomePage() {
               <Link to="/demo">Explore the product</Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link to="/donate">Support the work</Link>
+              <a {...DONATE_LINK_PROPS}>Support the work</a>
             </Button>
           </div>
           <p className="mt-8 text-base text-muted-foreground">

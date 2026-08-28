@@ -60,7 +60,7 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL:-}
         - VITE_APP_NAME=${VITE_APP_NAME:-Talk Box}
-        - VITE_DONATE_URL=${VITE_DONATE_URL:-https://gofund.me/b43bc3451}
+        - VITE_DONATE_URL=${VITE_DONATE_URL:-https://www.gofundme.com/f/help-someone-without-a-phone-find-their-way-into-shelter}
         - VITE_DONATE_LABEL=${VITE_DONATE_LABEL:-Donate now}
         - NODE_OPTIONS=${NODE_OPTIONS:-}
     ports:
