@@ -57,6 +57,20 @@ def test_anonymous_device_status_is_public(monkeypatch) -> None:
     assert status.calling_enabled is False
 
 
+def test_localhost_appliance_can_call_without_enrollment(monkeypatch) -> None:
+    monkeypatch.setattr(kiosk_device_auth.settings, "kiosk_calling_enabled", True)
+    monkeypatch.setattr(kiosk_device_routes.settings, "kiosk_calling_enabled", True)
+    monkeypatch.setattr(kiosk_device_auth, "device_connection", lambda: pytest.fail("DB not needed"))
+    request = make_request({"Host": "localhost:8084"})
+
+    device = kiosk_device_auth.require_kiosk_device(request)
+    status = kiosk_device_routes.device_status(request)
+
+    assert device.device_code == "TB-LOCAL"
+    assert status.enrolled is True
+    assert status.calling_enabled is True
+
+
 def test_invalid_device_cookie_is_rejected(monkeypatch) -> None:
     monkeypatch.setattr(kiosk_device_auth, "_find_device", lambda credential: None)
     request = make_request({"Cookie": "talkbox_kiosk_device=invalid"})

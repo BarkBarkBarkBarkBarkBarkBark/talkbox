@@ -38,6 +38,25 @@ class KioskDevice:
     revoked: bool
 
 
+# The Pi appliance browser hits FastAPI via nginx as Host: localhost.
+# Fleet enrollment cookies are for remote kiosks; this machine is the kiosk.
+LOCAL_APPLIANCE = KioskDevice(
+    id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+    device_code="TB-LOCAL",
+    display_name="Local appliance",
+    location="localhost",
+    enabled=True,
+    revoked=False,
+)
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def is_local_appliance(request: Request) -> bool:
+    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+    return host in _LOCAL_HOSTS
+
+
 def new_credential() -> str:
     return secrets.token_urlsafe(32)
 
@@ -131,14 +150,21 @@ def optional_kiosk_device(request: Request) -> KioskDevice | None:
 
 def require_kiosk_device(request: Request) -> KioskDevice:
     device = optional_kiosk_device(request)
-    if device is None:
-        raise HTTPException(
-            status_code=403,
-            detail="Phone calling is available on enrolled TalkBox kiosks.",
-        )
-    return device
+    if device is not None:
+        return device
+    if settings.kiosk_calling_enabled and is_local_appliance(request):
+        return LOCAL_APPLIANCE
+    raise HTTPException(
+        status_code=403,
+        detail="Phone calling is available on enrolled TalkBox kiosks.",
+    )
 
 
 def kiosk_device_status(request: Request) -> KioskDevice | None:
     credential = _credential_from_request(request)
-    return _find_device(credential, include_inactive=True) if credential else None
+    device = _find_device(credential, include_inactive=True) if credential else None
+    if device is not None:
+        return device
+    if settings.kiosk_calling_enabled and is_local_appliance(request):
+        return LOCAL_APPLIANCE
+    return None

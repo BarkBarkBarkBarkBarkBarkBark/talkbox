@@ -4,7 +4,9 @@ import { ExternalLink, Heart } from "lucide-react";
 import KioskGallery from "../components/marketing/KioskGallery.jsx";
 import { Button } from "../components/ui/Button.jsx";
 
-const DONATE_URL = (import.meta.env.VITE_DONATE_URL || "").trim();
+const DONATE_URL = (
+  import.meta.env.VITE_DONATE_URL || "https://gofund.me/b43bc3451"
+).trim();
 const DONATE_LABEL = (import.meta.env.VITE_DONATE_LABEL || "Donate now").trim();
 
 export default function DonatePage() {

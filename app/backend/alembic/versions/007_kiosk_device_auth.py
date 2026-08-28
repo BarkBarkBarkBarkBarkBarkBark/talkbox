@@ -1,7 +1,7 @@
 """add kiosk device authentication tables
 
-Revision ID: 006_kiosk_device_auth
-Revises: 005_agency_categories
+Revision ID: 007_kiosk_device_auth
+Revises: 006_catalog_meta
 Create Date: 2026-08-13
 """
 
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "006_kiosk_device_auth"
-down_revision: Union[str, Sequence[str], None] = "005_agency_categories"
+revision: str = "007_kiosk_device_auth"
+down_revision: Union[str, Sequence[str], None] = "006_catalog_meta"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

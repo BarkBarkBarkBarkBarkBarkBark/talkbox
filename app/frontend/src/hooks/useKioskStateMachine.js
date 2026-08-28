@@ -284,7 +284,9 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
             type: "CONFIG_LOADED",
             config: {
               ...cfg,
-              calling_enabled: Boolean(cfg.calling_enabled && device.calling_enabled),
+              calling_enabled: Boolean(
+                cfg.calling_enabled && (device.calling_enabled || !fakeCall),
+              ),
             },
           });
         }
@@ -296,7 +298,7 @@ export function useKioskStateMachine({ fakeCall = true } = {}) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [fakeCall]);
 
   const announce = useCallback((text) => speak(text), []);
 

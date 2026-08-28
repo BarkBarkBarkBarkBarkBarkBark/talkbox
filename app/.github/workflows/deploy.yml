@@ -45,6 +45,8 @@ jobs:
             build_args: |
               VITE_API_URL=${{ vars.VITE_API_URL }}
               VITE_APP_NAME=${{ vars.VITE_APP_NAME }}
+              VITE_DONATE_URL=${{ vars.VITE_DONATE_URL || 'https://gofund.me/b43bc3451' }}
+              VITE_DONATE_LABEL=${{ vars.VITE_DONATE_LABEL }}
               VITE_DISABLE_AUTH=${{ vars.VITE_DISABLE_AUTH }}
     steps:
       - name: Checkout source
